@@ -28,6 +28,14 @@ DEBUG = config('DEBUG', cast=bool, default=False)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# Render injects the service's own public hostname into every deploy. Trusting
+# it here means a deploy cannot fail on a forgotten ALLOWED_HOSTS entry, and the
+# value stays correct if the service is ever renamed. Anything set explicitly in
+# ALLOWED_HOSTS is kept as well.
+RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default='')
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
 
 # Application definition
 
@@ -191,6 +199,10 @@ CORS_ALLOWED_ORIGINS = config(
 # Needed to log into /admin/ through the deployed domain — Django checks the
 # Origin of the POST against this list.
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=_csv)
+if RENDER_EXTERNAL_HOSTNAME:
+    _render_origin = f'https://{RENDER_EXTERNAL_HOSTNAME}'
+    if _render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_render_origin)
 
 # ── Request size limits ───────────────────────────────
 # A JSON body big enough to exhaust memory is the cheapest denial-of-service
