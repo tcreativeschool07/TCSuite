@@ -122,19 +122,3 @@ Auth flow: login → tokens in `localStorage` (`access_token`/`refresh_token`) �
 
 For UI conventions (colour tokens, typography, component classes like `.panel`/`.btn-*`/`.badge`/`.ledger`, panel hover behaviour, page patterns, responsive breakpoints) — the live source of truth is **`frontend-next/app/globals.css`** (tokens in `:root`/`.dark`, components in the `@layer components` block) plus `frontend-next/tailwind.config.js`. There is no separate design document: the CSS is the spec.
 
-## Things to double-check before relying on them
-
-- `backend/.env` is present (git-ignored); `backend/.env.example` shows required keys: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`.
-- `StudentProfile.password` is a plain field hashed manually via `make_password()` in the serializer — there's no actual student-login view using it yet (`email`/`password` fields look forward-looking / unused by current API).
-- Class name matching between `StudentProfile.current_class` (free text) and `ClassRoom.name` is done via case-insensitive comparison scattered across multiple views — not a FK. Renaming a `ClassRoom` won't cascade to students.
-
-## Working-tree state
-
-Effectively everything of substance is still uncommitted: `backend/ledger.py`'s
-fee ledger, migrations 0004–0006, the whole `frontend-next/` app, and these docs
-are untracked; the `backend/fees/*` modules are modified. Last commit is
-`fea5a95 UI`, made before the backend move — so git still shows the old
-root-level paths as deletions until the rename is committed.
-
-Migration **`0006_customreceipt` is created but not applied** — run
-`python backend/manage.py migrate` before using the New receipt flow.
