@@ -1,0 +1,571 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ════════════════════════════════════════════════════════════
+   TOKENS — "The Registrar"
+   All colors live here; components use tokens only.
+   ════════════════════════════════════════════════════════════ */
+:root {
+  --canvas: #F6F6F3;
+  --surface: #FFFFFF;
+  --surface-sunken: #EFEFEA;
+  --edge: #E2E1DA;
+  --rule: #ECEBE5;
+  --ink: #20241F;
+  --ink-2: #565B54;
+  --ink-3: #8B9088;
+  --accent: #1E5C48;
+  --accent-strong: #164A3A;
+  --accent-tint: #E6F0EB;
+  --on-accent: #F5FBF8;
+  --focus: #2F7A62;
+
+  /* semantic status pairs (text / fill) */
+  --ok: #1E5C48;      --ok-tint: #E6F0EB;
+  --warn: #8A5A12;    --warn-tint: #F7EDD8;
+  --danger: #A23B32;  --danger-tint: #F9E9E6;
+  --info: #3E5A78;    --info-tint: #E9EFF5;
+  --neutral: #565B54; --neutral-tint: #EFEFEA;
+
+  /* depth: a hairline lift for panels, the one real shadow for overlays */
+  --ink-rgb: 32, 36, 31;
+  --shadow-1: 0 1px 0 rgba(var(--ink-rgb), 0.03), 0 1px 2px rgba(var(--ink-rgb), 0.05);
+  --shadow-2: 0 2px 6px rgba(var(--ink-rgb), 0.06), 0 1px 2px rgba(var(--ink-rgb), 0.04);
+  --shadow-overlay: 0 12px 32px rgba(18, 24, 19, 0.16), 0 2px 6px rgba(18, 24, 19, 0.08);
+  /* the hover state of a card: a real lift, short of an overlay's */
+  --shadow-lift: 0 10px 24px rgba(var(--ink-rgb), 0.10), 0 2px 6px rgba(var(--ink-rgb), 0.06);
+  --shimmer: rgba(255, 255, 255, 0.65);
+
+  /* paper: fine grain + a faint light from the top */
+  --grain-opacity: 0.045;
+  --canvas-light: rgba(255, 255, 255, 0.55);
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+}
+
+.dark {
+  --canvas: #121713;
+  --surface: #191F1A;
+  --surface-sunken: #151B16;
+  --edge: #2A302B;
+  --rule: #222823;
+  --ink: #E8EAE5;
+  --ink-2: #A9AFA6;
+  --ink-3: #7A8077;
+  --accent: #5CB894;
+  --accent-strong: #79CBA9;
+  --accent-tint: #1C332A;
+  --on-accent: #0E1F19;
+  --focus: #4EA787;
+
+  --ok: #6FC4A2;      --ok-tint: #1C332A;
+  --warn: #D8A54E;    --warn-tint: #2E2415;
+  --danger: #E08B80;  --danger-tint: #331B18;
+  --info: #8FB0CE;    --info-tint: #182430;
+  --neutral: #A9AFA6; --neutral-tint: #20261F;
+
+  --ink-rgb: 0, 0, 0;
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.025) inset, 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-2: 0 2px 8px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 14px 30px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.34);
+  --shimmer: rgba(255, 255, 255, 0.05);
+
+  --grain-opacity: 0.06;
+  --canvas-light: rgba(255, 255, 255, 0.025);
+}
+
+/* ════════════════════════════════════════════════════════════
+   BASE
+   ════════════════════════════════════════════════════════════ */
+@layer base {
+  html {
+    font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The canvas is paper: a flat tone, a faint light from the top edge, and a
+     fine grain. All three are cheap — the grain is one inline SVG tile. */
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  /* two fixed layers under everything: the light wash, then the grain tile
+     toned by --grain-opacity. pointer-events off; content sits above at z=1. */
+  body::before,
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  body::before {
+    background-image: linear-gradient(180deg, var(--canvas-light) 0%, transparent 320px);
+  }
+  body::after {
+    opacity: var(--grain-opacity);
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
+  .dark body::after { mix-blend-mode: screen; }
+  body > * { position: relative; z-index: 1; }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  p { text-wrap: pretty; }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+
+  /* Focus: visible ring on every interactive element, eased in. Never removed. */
+  *:focus {
+    outline: none;
+  }
+  *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 40%, transparent);
+    transition: box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  /* Scrollbars: 10px, thumb --edge, no track color */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--edge);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--ink-3) 60%, var(--edge));
+    background-clip: padding-box;
+  }
+
+  /* View Transitions (theme crossfade): both snapshots fade over each other.
+     Browsers without the API simply toggle. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 260ms;
+    animation-timing-function: var(--ease-in-out);
+  }
+
+  /* Paper texture must never reach the printer. */
+  @media print {
+    body::before, body::after { display: none; }
+    body { background: #fff; }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   COMPONENTS
+   ════════════════════════════════════════════════════════════ */
+@layer components {
+
+  /* ── page title — the only serif in the app UI ── */
+  .page-title {
+    font-family: var(--font-display), Georgia, 'Times New Roman', serif;
+    font-size: 28px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+
+  /* ── panel (replaces .card): flat, bordered, hairline lift ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    box-shadow: var(--shadow-1);
+    transition: border-color var(--dur-base) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out),
+                transform var(--dur-base) var(--ease-out);
+  }
+
+  /* Hover raises a panel off the paper. Section panels (a table, a form) only
+     rise — scaling something 1200px wide overshoots its column and drags the
+     eye around the page. Reduced motion zeroes every transition globally (see
+     the media query at the end of this file), leaving just the colour change.
+     The three rules below are deliberately equal or ascending in specificity
+     and ordered so the later one wins; adding a :not() to this first selector
+     would outrank the card rule and quietly kill the scale. */
+  .panel:hover {
+    border-color: color-mix(in srgb, var(--accent) 22%, var(--edge));
+    box-shadow: var(--shadow-2);
+    transform: translateY(-2px);
+  }
+
+  /* Panels nest — the class cards on the fee dashboard sit inside a container
+     panel — and hovering a child hovers every ancestor. Without this the two
+     lifts compound and the whole list shifts under the pointer, so a panel that
+     only *contains* the hovered one stays exactly where it is. */
+  .panel:has(.panel:hover) {
+    border-color: var(--edge);
+    box-shadow: var(--shadow-1);
+    transform: none;
+  }
+
+  /* Cards — the KPI tiles and the clickable class cards — come further
+     forward and scale up, so they read as lifting toward the pointer. */
+  .kpi-tile:hover,
+  .panel-interactive:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--edge));
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-4px) scale(1.02);
+  }
+
+  /* Overlay surfaces never move. The modal dialog and the command palette both
+     carry .panel, and their backdrop is a DOM child — so hovering the backdrop
+     hovers the dialog. A dialog that drifts when the mouse crosses it is a bug,
+     and worse, a transform makes it the containing block for anything fixed
+     inside it. */
+  .panel.shadow-overlay:hover {
+    border-color: var(--edge);
+    transform: none;
+  }
+
+  /* ── buttons ── */
+  .btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    user-select: none;
+    transition: background-color var(--dur-fast) var(--ease-out),
+                border-color var(--dur-fast) var(--ease-out),
+                color var(--dur-fast) var(--ease-out),
+                box-shadow var(--dur-fast) var(--ease-out),
+                transform 80ms var(--ease-out);
+  }
+  .btn:active:not(:disabled) { transform: translateY(0.5px) scale(0.99); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-sm { height: 30px; padding: 0 10px; font-size: 13px; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 1px 1px rgba(var(--ink-rgb), 0.08);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-strong);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 2px 4px rgba(var(--ink-rgb), 0.14);
+  }
+  .btn-primary:active:not(:disabled) { box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.15); }
+
+  .btn-secondary {
+    background: var(--surface);
+    border: 1px solid var(--edge);
+    color: var(--ink);
+    box-shadow: var(--shadow-1);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--surface-sunken);
+    border-color: color-mix(in srgb, var(--ink-3) 45%, var(--edge));
+  }
+
+  .btn-ghost { background: transparent; color: var(--ink-2); }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface-sunken); color: var(--ink); }
+
+  .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+  .btn-danger:hover:not(:disabled) { background: var(--danger-tint); }
+
+  /* destructive confirm inside modals: solid danger */
+  .btn-danger-solid { background: var(--danger); color: #FFFFFF; }
+  .btn-danger-solid:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 88%, black);
+  }
+
+  /* ── inputs ── */
+  .input {
+    display: block;
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    background: var(--surface);
+    border: 1px solid var(--edge);
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--ink);
+    box-shadow: inset 0 1px 1px rgba(var(--ink-rgb), 0.03);
+    transition: border-color var(--dur-fast) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out),
+                background-color var(--dur-fast) var(--ease-out);
+  }
+  textarea.input { height: auto; padding: 8px 12px; }
+  .input::placeholder { color: var(--ink-3); }
+  .input:hover:not(:disabled):not(:focus) {
+    border-color: color-mix(in srgb, var(--ink-3) 45%, var(--edge));
+  }
+  .input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 40%, transparent);
+  }
+  .input:disabled { background: var(--surface-sunken); color: var(--ink-3); cursor: not-allowed; }
+  .input-error { border-color: var(--danger); }
+  .input-error:focus {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 30%, transparent);
+  }
+  .dark select.input option { background: var(--surface); color: var(--ink); }
+  /* number inputs: hide the always-visible spinner; it reappears on hover */
+  .input[type='number']::-webkit-inner-spin-button { opacity: 0; transition: opacity var(--dur-fast); }
+  .input[type='number']:hover::-webkit-inner-spin-button,
+  .input[type='number']:focus::-webkit-inner-spin-button { opacity: 1; }
+
+  /* Label: 13px / 500, sentence case, never uppercase */
+  .label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-2);
+    margin-bottom: 6px;
+  }
+
+  /* keyboard hint chips (search trigger, palette footer) */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 4px;
+    border: 1px solid var(--edge);
+    border-bottom-width: 2px;
+    background: var(--surface);
+    color: var(--ink-3);
+    font-size: 11px;
+    font-weight: 500;
+    font-family: inherit;
+    line-height: 1;
+  }
+
+  /* ── badge: pill, tinted fill + status text, 6px leading dot ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .badge-ok      { color: var(--ok);      background: var(--ok-tint); }
+  .badge-warn    { color: var(--warn);    background: var(--warn-tint); }
+  .badge-danger  { color: var(--danger);  background: var(--danger-tint); }
+  .badge-info    { color: var(--info);    background: var(--info-tint); }
+  .badge-neutral { color: var(--neutral); background: var(--neutral-tint); }
+
+  /* ── the ledger table — the signature element ──
+     border-spacing 0 (not collapse) so the sticky header keeps its rule. */
+  .ledger { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .ledger thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-2);
+    text-align: left;
+    white-space: nowrap;
+    background: var(--surface);
+    border-bottom: 3px double var(--edge);   /* the ledger mark */
+  }
+  .ledger tbody td {
+    padding: 10px 16px;
+    font-size: 14px;
+    color: var(--ink);
+    border-bottom: 1px solid var(--rule);
+  }
+  .ledger tbody tr { transition: background-color var(--dur-fast) var(--ease-out); }
+  .ledger tbody tr:hover { background: var(--surface-sunken); }
+  .ledger tbody tr:last-child td { border-bottom: none; }
+  .ledger tfoot td {
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--surface);
+    border-top: 2px solid var(--edge);
+  }
+
+  /* flagged rows: 2px danger bar on the left edge + danger fill at 40% */
+  .ledger tr.row-flag { background: color-mix(in srgb, var(--danger-tint) 40%, transparent); }
+  .ledger tbody tr.row-flag:hover { background: var(--danger-tint); }
+  .ledger tr.row-flag > td:first-child { box-shadow: inset 2px 0 0 var(--danger); }
+
+  /* advance-payment rows: same treatment in info */
+  .ledger tr.row-info { background: color-mix(in srgb, var(--info-tint) 40%, transparent); }
+  .ledger tbody tr.row-info:hover { background: var(--info-tint); }
+  .ledger tr.row-info > td:first-child { box-shadow: inset 2px 0 0 var(--info); }
+
+  /* rows revealed top-to-bottom on first paint (dashboard, lists) */
+  .ledger tbody tr.row-in { animation: row-in 260ms var(--ease-out) both; }
+  @keyframes row-in {
+    from { opacity: 0; transform: translateY(3px); }
+  }
+
+  /* ── skeleton loading blocks: shimmer sweep over a sunken base ── */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface-sunken);
+    border-radius: 6px;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--shimmer), transparent);
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+    animation-delay: var(--sk-delay, 0s);
+  }
+  @keyframes skeleton-shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  /* ── page loader: ledger lines being ruled, one after another ── */
+  .loader-rule {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    width: 56px;
+  }
+  .loader-rule span {
+    display: block;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent);
+    transform-origin: left center;
+    animation: rule-draw 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .loader-rule span:nth-child(2) { animation-delay: 0.14s; width: 78%; }
+  .loader-rule span:nth-child(3) { animation-delay: 0.28s; width: 88%; }
+  @keyframes rule-draw {
+    0%   { transform: scaleX(0); opacity: 0; }
+    45%  { transform: scaleX(1); opacity: 1; }
+    78%  { transform: scaleX(1); opacity: 1; }
+    100% { transform: scaleX(1); opacity: 0; }
+  }
+
+  /* ── arc spinner (buttons, inline) ── */
+  .spin-arc { animation: spin-arc 0.7s linear infinite; }
+  @keyframes spin-arc { to { transform: rotate(360deg); } }
+
+  /* ── command palette ── */
+  .palette-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 6px;
+    text-align: left;
+    color: var(--ink);
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+  .palette-item[aria-selected='true'] { background: var(--accent-tint); color: var(--accent); }
+  .palette-item[aria-selected='true'] .palette-sub { color: color-mix(in srgb, var(--accent) 75%, var(--ink-2)); }
+  .palette-sub { font-size: 12.5px; color: var(--ink-3); }
+  .palette-group {
+    padding: 10px 12px 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--ink-3);
+    letter-spacing: 0.01em;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   UTILITIES
+   ════════════════════════════════════════════════════════════ */
+@layer utilities {
+  /* tabular figures for money, IDs, counts — replaces all font-mono in UI */
+  /* Amounts never break across lines - "Rs 5,600" splitting after the "Rs"
+     reads as two separate figures. Tables carrying these sit in
+     overflow-x-auto wrappers, so nowrap scrolls rather than overflows. */
+  .num { font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+
+  /* KPI tiles: the value must never wrap — a five-across grid leaves ~178px of
+     inner width, and "Rs 1,141,200" at 28px breaks after the "Rs". Sizing the
+     figure against the tile's own width keeps long amounts on one line and
+     still renders at full size in wider layouts. The plain font-size first is
+     the fallback for engines without container-query units. */
+  .kpi-tile { container-type: inline-size; }
+  .kpi-value {
+    white-space: nowrap;
+    font-size: 28px;
+    font-size: clamp(17px, 12cqi, 28px);
+  }
+
+  /* route change: one short fade on the content region. Opacity only — a
+     transform here (even a finished identity one) turns the wrapper into the
+     containing block for every position:fixed dialog inside it, which then
+     centres in the page instead of the viewport. */
+  .route-fade { animation: route-fade 180ms var(--ease-out) both; }
+  @keyframes route-fade {
+    from { opacity: 0; }
+  }
+
+  /* generic "arrived" motion for panels that mount after data */
+  .rise-in { animation: rise-in 220ms var(--ease-out) both; }
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(6px); }
+  }
+
+  /* login static fallback (also shown while the Three.js scene loads) */
+  .login-vignette {
+    background:
+      radial-gradient(1000px 600px at 50% 30%, rgba(46, 122, 95, 0.16), transparent 65%),
+      #0E130F;
+  }
+
+  /* login orchestrated entrance: scene fades 600ms, then the form
+     rises 12px + fades over 400ms. Runs once. */
+  .login-scene-in { animation: login-fade 600ms ease-out both; }
+  .login-form-in { animation: login-rise 400ms var(--ease-out) 600ms both; }
+  @keyframes login-fade { from { opacity: 0; } }
+  @keyframes login-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* Reduced motion: transitions ~0ms, animations effectively off */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* loaders must stay legible when their animation is disabled */
+  .loader-rule span { animation: none !important; transform: none; opacity: 1; }
+  .skeleton::after { display: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
+}
