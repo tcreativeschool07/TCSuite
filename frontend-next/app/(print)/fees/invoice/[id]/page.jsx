@@ -17,6 +17,20 @@ const MONTHS = [
 
 const num = (v) => Number(v || 0)
 
+// 2026-09-08 -> 8 September 2026. Matches the PDF receipt.
+const fmtDate = (v) => {
+  if (!v) return ''
+  const d = new Date(`${String(v).slice(0, 10)}T00:00:00`)
+  return Number.isNaN(d.getTime())
+    ? String(v)
+    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+// This receipt is printed on A5. A student owing a dozen months would push it
+// onto a second sheet, so the oldest few are listed and the rest are rolled
+// into one line that keeps the column adding up — same rule as fees/pdf.py.
+const MAX_ARREAR_LINES = 6
+
 // The arrears on a receipt, split into the months they are owed for. Mirrors
 // _arrear_rows() in fees/pdf.py, including the reconciliation against
 // previous_balance so the printed rows always add up to the total.
@@ -46,6 +60,17 @@ function buildArrearLines(record) {
     lines.push({ key: 'prev', label: 'Previous Balance', amount: prev })
   } else if (residual > 0.5) {
     lines.push({ key: 'earlier', label: 'Arrears - Earlier Dues', amount: residual })
+  }
+
+  if (lines.length > MAX_ARREAR_LINES) {
+    const keep = lines.slice(0, MAX_ARREAR_LINES - 1)
+    const folded = lines.slice(keep.length).reduce((s, l) => s + l.amount, 0)
+    keep.push({
+      key: 'folded',
+      label: `Arrears - ${lines.length - keep.length} earlier months`,
+      amount: folded,
+    })
+    return keep
   }
   return lines
 }
@@ -89,9 +114,32 @@ export default function InvoiceStudent() {
     <>
       <style>{`
         @media print {
-          body { margin: 0; }
+          body { margin: 0; background: #fff; }
           .no-print { display: none !important; }
-          @page { size: A5; margin: 12mm; }
+          @page { size: A5; margin: 10mm; }
+
+          /* On screen the receipt is a floating card; on paper it is the page.
+             Dropping the card chrome and tightening every vertical rhythm is
+             what keeps a student with a long arrears history on one sheet —
+             the arrears list itself is capped at MAX_ARREAR_LINES above. */
+          .invoice {
+            margin: 0; padding: 0; max-width: none;
+            box-shadow: none; border-radius: 0;
+            page-break-inside: avoid;
+          }
+          .header { padding-bottom: 10px; margin-bottom: 10px; }
+          .school-name { font-size: 18px; }
+          .school-sub, .receipt-no { font-size: 10px; }
+          .invoice-title { font-size: 11px; margin-top: 5px; }
+          table { margin-top: 8px; page-break-inside: avoid; }
+          td { padding: 2px 6px; font-size: 10.5px; }
+          .section-title { padding: 8px 6px 2px; font-size: 9.5px; }
+          .amount-row td { font-size: 11px; padding: 2.5px 6px; }
+          .total-row td { font-size: 11.5px; padding-top: 5px; }
+          .sig-row { margin-top: 20px; }
+          .sig-box, .footer { font-size: 9px; }
+          .footer { margin-top: 12px; padding-top: 6px; }
+          tr { page-break-inside: avoid; }
         }
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; }
         .invoice { background: white; max-width: 600px; margin: 20px auto; padding: 32px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
@@ -141,7 +189,7 @@ export default function InvoiceStudent() {
           <div className="school-name">The Creative School</div>
           <div className="school-sub">Fee Payment Invoice</div>
           <div className="invoice-title">Monthly Fee Receipt</div>
-          <div className="receipt-no">Receipt No: <strong>{record.receipt_no}</strong> &nbsp;·&nbsp; Date: {record.receipt_date}</div>
+          <div className="receipt-no">Receipt No: <strong>{record.receipt_no}</strong> &nbsp;·&nbsp; Issued: {fmtDate(record.receipt_date)}</div>
         </div>
 
         {/* Student info */}
@@ -192,14 +240,20 @@ export default function InvoiceStudent() {
                 <td className="value">Rs {Number(record.balance).toLocaleString()}</td>
               </tr>
             )}
-            <tr>
-              <td className="label">Due Date</td>
-              <td className="value">{record.due_date}</td>
-            </tr>
+            {/* Once nothing is owed the deadline is noise — what matters is
+                the date it was settled. */}
+            {record.due_date && Number(record.balance) > 0 && (
+              <tr>
+                <td className="label">Due Date</td>
+                <td className="value">{fmtDate(record.due_date)}</td>
+              </tr>
+            )}
             {record.payment_date && (
               <tr>
-                <td className="label">Payment Date</td>
-                <td className="value">{record.payment_date}</td>
+                <td className="label">Paid On</td>
+                <td className="value" style={{ color: '#1E5C48', fontWeight: 700 }}>
+                  {fmtDate(record.payment_date)}
+                </td>
               </tr>
             )}
             <tr>
