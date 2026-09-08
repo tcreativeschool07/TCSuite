@@ -565,7 +565,7 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
         per_class = {}
         advanced_students = []          # credit drawn down, written in one batch
         applied_advance   = Decimal(0)
-        today = timezone.now().date()
+        today = timezone.localdate()
 
         # Receipt numbers are allocated from a single running sequence, and the
         # (student, month, year) pair is unique — so two runs launched together

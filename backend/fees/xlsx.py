@@ -9,6 +9,7 @@ and print settings that fit a class onto one landscape page.
 import io
 from datetime import date
 
+from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -35,6 +36,19 @@ MONEY = '#,##0'
 
 _thin = Side(style='thin', color=RULE)
 BOX = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+
+
+def _as_date(value):
+    """ISO string -> date, so Excel treats the column as dates rather than text."""
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        y, m, d = (int(part) for part in str(value)[:10].split('-'))
+        return date(y, m, d)
+    except (ValueError, TypeError):
+        return None
 
 
 def _num(v):
@@ -66,14 +80,21 @@ COLUMNS = [
     ('Fee',             10,  'money'),
     ('Charges',         10,  'money'),
     ('Total due',       12,  'money'),
+    # Credit the school already held and applied to this month, so a row that
+    # shows nothing collected in cash still reconciles.
+    ('Advance',         11,  'money'),
     ('Paid',            11,  'money'),
     ('Balance',         12,  'money'),
     ('Status',          10,  'text'),
+    # A real date, not text, so the sheet sorts and filters on it.
+    ('Paid on',         14,  'date'),
 ]
 
 FIRST_MONEY_COL = 7   # 'Arrears'
-BALANCE_COL     = 12
-STATUS_COL      = 13
+BALANCE_COL     = 13
+STATUS_COL      = 14
+PAID_ON_COL     = 15
+DATE_FMT        = 'dd mmm yyyy'
 
 
 def _fmt_receipt(r):
@@ -100,7 +121,7 @@ def _title_block(ws, class_name, month, year, records, summary):
     ws.row_dimensions[2].height = 17
 
     ws.merge_cells(f'A3:{last_col}3')
-    ws['A3'] = f"Generated {date.today():%d %B %Y}"
+    ws['A3'] = f"Generated {timezone.localtime():%d %B %Y at %I:%M %p}"
     ws['A3'].font = Font(name='Calibri', size=9, color=INK_SOFT)
 
     due       = _num(summary.get('total_due'))
@@ -170,9 +191,11 @@ def generate_class_collection_xlsx(class_name, month, year, records, summary):
             _num(r.get('current_fee')),
             _num(r.get('misc_charges')),
             _num(r.get('total_amount')),
+            _num(r.get('advance_applied')),
             _num(r.get('amount_paid')),
             _num(r.get('balance')),
             status.title(),
+            _as_date(r.get('payment_date')),
         ]
 
         for col, value in enumerate(values, start=1):
@@ -182,6 +205,9 @@ def generate_class_collection_xlsx(class_name, month, year, records, summary):
             if FIRST_MONEY_COL <= col <= BALANCE_COL:
                 c.number_format = MONEY
                 c.alignment = Alignment(horizontal='right', indent=1)
+            elif col == PAID_ON_COL:
+                c.number_format = DATE_FMT
+                c.alignment = Alignment(horizontal='center')
             elif col == 1:
                 c.alignment = Alignment(horizontal='center')
             else:

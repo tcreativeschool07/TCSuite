@@ -31,6 +31,23 @@ const fmtDate = (v) => {
 // into one line that keeps the column adding up — same rule as fees/pdf.py.
 const MAX_ARREAR_LINES = 6
 
+// When this sheet was produced, captured once when the data lands rather than
+// on every render, so the printed copy and the screen agree. The browser's own
+// locale/zone is the right one here — it is the office machine doing the print.
+function useGeneratedStamp(ready) {
+  const [stamp, setStamp] = useState('')
+  useEffect(() => {
+    if (ready && !stamp) {
+      setStamp(new Date().toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      }))
+    }
+  }, [ready, stamp])
+  return stamp
+}
+
+
 // The arrears on a receipt, split into the months they are owed for. Mirrors
 // _arrear_rows() in fees/pdf.py, including the reconciliation against
 // previous_balance so the printed rows always add up to the total.
@@ -81,6 +98,7 @@ export default function InvoiceStudent() {
   const [record, setRecord] = useState(null)
   const [error, setError]   = useState(null)
   const printed = useRef(false)
+  const generated = useGeneratedStamp(!!record)
 
   useEffect(() => {
     if (!id) return
@@ -301,7 +319,8 @@ export default function InvoiceStudent() {
         </div>
 
         <div className="footer">
-          This is a computer-generated receipt. — The Creative School
+          Generated {generated} — The Creative School
+          <br />This is a computer-generated receipt.
         </div>
       </div>
     </>

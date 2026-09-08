@@ -222,10 +222,10 @@ class FeeRecord(models.Model):
         # payment flow overwrites it with the date of the payment being applied.
         if (self.amount_paid or 0) > 0 and not self.payment_date:
             from django.utils import timezone
-            self.payment_date = timezone.now().date()
+            self.payment_date = timezone.localdate()
         elif self.status == 'advance' and not self.payment_date:
             from django.utils import timezone
-            self.payment_date = timezone.now().date()
+            self.payment_date = timezone.localdate()
 
         super().save(*args, **kwargs)
 

@@ -25,6 +25,7 @@ function InvoiceClassInner() {
   const [data, setData]   = useState(null)
   const [error, setError] = useState(null)
   const printed = useRef(false)
+  const generated = useGeneratedStamp(!!data)
 
   useEffect(() => {
     if (!className || !month || !year) {
@@ -181,8 +182,9 @@ function InvoiceClassInner() {
             <div className="sig-line" />
             Accounts Officer
           </div>
-          <div style={{ color: '#9ca3af', alignSelf: 'flex-end', fontSize: 10 }}>
+          <div style={{ color: '#9ca3af', alignSelf: 'flex-end', fontSize: 10, textAlign: 'center' }}>
             The Creative School — Fee Collection Sheet
+            <br />Generated {generated}
           </div>
           <div className="sig-box">
             <div className="sig-line" />
@@ -192,6 +194,22 @@ function InvoiceClassInner() {
       </div>
     </>
   )
+}
+
+// When this sheet was produced, captured once when the data lands rather than
+// on every render, so the printed copy and the screen agree. The browser's own
+// locale/zone is the right one here — it is the office machine doing the print.
+function useGeneratedStamp(ready) {
+  const [stamp, setStamp] = useState('')
+  useEffect(() => {
+    if (ready && !stamp) {
+      setStamp(new Date().toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      }))
+    }
+  }, [ready, stamp])
+  return stamp
 }
 
 export default function InvoiceClassPage() {

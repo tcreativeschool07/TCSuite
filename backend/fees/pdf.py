@@ -11,6 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from reportlab.pdfgen import canvas as pdfcanvas
 from reportlab.pdfbase import pdfmetrics
+from django.utils import timezone
 
 MONTHS = [
     '', 'January', 'February', 'March', 'April', 'May', 'June',
@@ -245,7 +246,16 @@ def _arrear_cap_for(record, height):
     return max(allowed, 1)
 
 
-def _draw_receipt(c, x, y, w, h, record):
+def _generated_stamp():
+    """When this document was produced, in the school's timezone.
+
+    Every receipt in one run carries the same stamp, so a batch handed out
+    together can be told apart from a reprint later.
+    """
+    return f"Generated {timezone.localtime():%d %b %Y, %I:%M %p}"
+
+
+def _draw_receipt(c, x, y, w, h, record, generated=None):
     """Draw one receipt inside the box at (x, y) sized w x h."""
     rows = _receipt_rows(record, _arrear_cap_for(record, h))
     s = record.get('student', {}) or {}
@@ -378,8 +388,9 @@ def _draw_receipt(c, x, y, w, h, record):
     c.drawString(left, sig_y, 'Parent / Guardian')
     c.drawString(left + 104, sig_y, 'Accounts Officer')
 
-    # Due date and payment date both have their own lines above now.
-    notes = ['Computer-generated receipt']
+    # Due date and payment date both have their own lines above now; this is
+    # when the sheet itself was printed.
+    notes = [generated or _generated_stamp(), 'Computer-generated receipt']
     c.setFillColor(colors.HexColor('#9A9F97'))
     c.setFont('Helvetica', 5.5)
     c.drawRightString(right, sig_y, '  ·  '.join(notes))
@@ -416,6 +427,7 @@ def generate_bulk_invoices_pdf(records):
         c.setDash([])
         c.showPage()
 
+    generated = _generated_stamp()      # one stamp for the whole batch
     cursor = page_h - margin    # top edge of the next receipt
     cuts   = []
     for record in records:
@@ -425,7 +437,7 @@ def generate_bulk_invoices_pdf(records):
             flush(cuts[:-1])
             cursor, cuts = page_h - margin, []
 
-        _draw_receipt(c, margin, cursor - height, width, height, record)
+        _draw_receipt(c, margin, cursor - height, width, height, record, generated)
         cursor -= height + gap
         cuts.append(cursor + gap / 2)
 

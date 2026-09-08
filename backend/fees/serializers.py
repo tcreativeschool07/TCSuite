@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 from .models import (
     ClassRoom, AcademicYear, FeeStructure, FeeRecord, SavedBalanceSheet,
@@ -306,15 +307,14 @@ class FeePaymentSerializer(serializers.ModelSerializer):
             if own_paid > 0 and is_late(instance):
                 from datetime import date
                 instance.is_late = True
-                instance.late_paid_on = date.today()
+                instance.late_paid_on = timezone.localdate()
             # save() leaves an allocation that already sums to amount_paid alone.
             instance.amount_paid = instance.allocation_total()
             # The receipt should show when *this* payment was taken, so a later
             # instalment moves the date on rather than keeping the first one.
             # An explicit payment_date in the request still wins (handled below).
             if own_paid > 0 and 'payment_date' not in validated_data:
-                from datetime import date
-                instance.payment_date = date.today()
+                instance.payment_date = timezone.localdate()
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

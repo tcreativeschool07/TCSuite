@@ -7,8 +7,9 @@ that derivation, and the routing of an "arrears" payment to the month(s) it
 actually settles, so a June fee paid in August lands on the June record (tagged
 late) and August's arrears shrink to match.
 """
-from datetime import date
 from decimal import Decimal
+
+from django.utils import timezone
 
 from .models import FeeRecord
 
@@ -100,7 +101,7 @@ def recompute_chain(student):
 
 def is_late(record, today=None):
     """A payment recorded after the record's month has ended is a late payment."""
-    today = today or date.today()
+    today = today or timezone.localdate()
     return (today.year, today.month) > (record.year, record.month)
 
 
@@ -243,7 +244,7 @@ def route_arrears_payment(record, amount, target=None, today=None):
         return []
     records = student_records(record.student)
     earlier = [r for r in records if period(r) < period(record)]
-    today = today or date.today()
+    today = today or timezone.localdate()
     month_names = dict(FeeRecord.MONTH_CHOICES)
 
     # Nothing earlier: the arrears live on this record itself.
@@ -328,7 +329,7 @@ def route_arrears_allocations(record, allocations, today=None):
     """
     records = student_records(record.student)
     earlier = [r for r in records if period(r) < period(record)]
-    today = today or date.today()
+    today = today or timezone.localdate()
     month_names = dict(FeeRecord.MONTH_CHOICES)
     touched = {}
     legacy = legacy_remaining(records)

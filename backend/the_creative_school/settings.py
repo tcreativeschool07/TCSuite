@@ -137,7 +137,12 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# The school is in Pakistan. Left at UTC, every timestamp read five hours
+# behind the clock on the wall, and worse, a payment taken after 5pm local was
+# stamped with the previous day's date — timezone.now().date() was resolving in
+# UTC. Timestamps are still stored in UTC (USE_TZ below); this is the zone they
+# are recorded and displayed in.
+TIME_ZONE = config('TIME_ZONE', default='Asia/Karachi')
 
 USE_I18N = True
 
