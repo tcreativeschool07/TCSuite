@@ -232,6 +232,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAdminUser',
     ),
+    # DRF ships the browsable HTML API on by default. It is genuinely useful
+    # while developing and is a liability in production: it publishes the shape
+    # of every endpoint and renders write forms for them. Keep it locally, serve
+    # plain JSON once DEBUG is off.
+    'DEFAULT_RENDERER_CLASSES': (
+        ('rest_framework.renderers.JSONRenderer',
+         'rest_framework.renderers.BrowsableAPIRenderer')
+        if DEBUG else
+        ('rest_framework.renderers.JSONRenderer',)
+    ),
     # Nothing internal ever reaches the client; see exceptions.py.
     'EXCEPTION_HANDLER': 'the_creative_school.exceptions.api_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': (
