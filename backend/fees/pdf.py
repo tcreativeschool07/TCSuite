@@ -247,12 +247,13 @@ def _arrear_cap_for(record, height):
 
 
 def _generated_stamp():
-    """When this document was produced, in the school's timezone.
+    """The day this document was produced, in the school's timezone.
 
-    Every receipt in one run carries the same stamp, so a batch handed out
-    together can be told apart from a reprint later.
+    Date only — the time of day added noise to a paper receipt without telling
+    anyone anything they needed. The timezone still matters: resolved in UTC
+    this would name the previous day for anything printed after 5pm local.
     """
-    return f"Generated {timezone.localtime():%d %b %Y, %I:%M %p}"
+    return f"Generated {timezone.localdate():%d %b %Y}"
 
 
 def _draw_receipt(c, x, y, w, h, record, generated=None):

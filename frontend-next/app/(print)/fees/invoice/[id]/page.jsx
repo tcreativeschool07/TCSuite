@@ -31,16 +31,15 @@ const fmtDate = (v) => {
 // into one line that keeps the column adding up — same rule as fees/pdf.py.
 const MAX_ARREAR_LINES = 6
 
-// When this sheet was produced, captured once when the data lands rather than
-// on every render, so the printed copy and the screen agree. The browser's own
-// locale/zone is the right one here — it is the office machine doing the print.
+// The day this sheet was produced, captured once when the data lands rather
+// than on every render, so the printed copy and the screen agree. Date only:
+// the time of day told nobody anything useful on a paper receipt.
 function useGeneratedStamp(ready) {
   const [stamp, setStamp] = useState('')
   useEffect(() => {
     if (ready && !stamp) {
-      setStamp(new Date().toLocaleString('en-GB', {
+      setStamp(new Date().toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
       }))
     }
   }, [ready, stamp])

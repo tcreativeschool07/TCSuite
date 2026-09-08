@@ -121,7 +121,7 @@ def _title_block(ws, class_name, month, year, records, summary):
     ws.row_dimensions[2].height = 17
 
     ws.merge_cells(f'A3:{last_col}3')
-    ws['A3'] = f"Generated {timezone.localtime():%d %B %Y at %I:%M %p}"
+    ws['A3'] = f"Generated {timezone.localdate():%d %B %Y}"
     ws['A3'].font = Font(name='Calibri', size=9, color=INK_SOFT)
 
     due       = _num(summary.get('total_due'))
