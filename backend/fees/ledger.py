@@ -143,6 +143,33 @@ def arrears_breakdown(record, records=None):
     }
 
 
+def student_advance(student):
+    """The credit a student currently holds, as a Decimal."""
+    try:
+        return max(ZERO, Decimal(student.advance or 0))
+    except (TypeError, ValueError, ArithmeticError):
+        return ZERO
+
+
+def take_advance(student, amount_due):
+    """Draw down as much of the student's advance as `amount_due` can absorb.
+
+    Returns what was drawn. The caller is responsible for saving the student —
+    every call site here writes the whole batch at once rather than one row per
+    student, so this only adjusts the in-memory value.
+
+    An advance is money the school already holds, so what it covers is recorded
+    as paid rather than as a discount: the record's total stays honest and the
+    balance falls because it has been settled.
+    """
+    available = student_advance(student)
+    if available <= 0 or amount_due <= 0:
+        return ZERO
+    used = min(available, amount_due)
+    student.advance = available - used
+    return used
+
+
 def outstanding_items(student):
     """Everything this student still owes, as pickable lines.
 

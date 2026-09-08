@@ -148,6 +148,13 @@ class FeeRecord(models.Model):
                             help_text="Sum of miscellaneous charges for this period.")
     is_advance        = models.BooleanField(default=False,
                             help_text="True if this record was created via advance payment.")
+    # How much of this record was settled out of the student's advance credit.
+    # It is counted inside amount_paid — an advance is money the school already
+    # holds — and kept separately so the receipt can show what was cash and what
+    # came out of the wallet, and so applying it stays auditable.
+    advance_applied   = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+                            help_text="Part of amount_paid that came from the "
+                                      "student's advance credit.")
 
     remarks           = models.TextField(blank=True)
     created_at        = models.DateTimeField(auto_now_add=True)

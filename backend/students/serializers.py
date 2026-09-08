@@ -9,7 +9,7 @@ class StudentListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "admission_no", "student_name",
             "f_g_name", "f_g_contact", "current_class",
-            "current_fee", "withdrawn", "arrear_dues",
+            "current_fee", "withdrawn", "arrear_dues", "advance",
         ]
 
 
@@ -35,7 +35,7 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             'class_of_admission', 'current_class',
             'current_fee',
             'withdrawn', 'class_of_withdrawl',
-            'arrear_dues', 'remarks',
+            'arrear_dues', 'advance', 'remarks',
             'email', 'password',
         ]
         extra_kwargs = {
@@ -102,5 +102,5 @@ class StudentFeeInfoSerializer(serializers.ModelSerializer):
             'id', 'student_name', 'admission_no',
             'current_class', 'current_fee',
             'f_g_name', 'f_g_contact', 'f_g_cnic',
-            'arrear_dues',
+            'arrear_dues', 'advance',
         ]

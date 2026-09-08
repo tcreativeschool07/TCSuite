@@ -41,6 +41,15 @@ class StudentProfile(models.Model):
                             help_text="Individual monthly fee override. Leave blank to use class FeeStructure."
                         )
     arrear_dues        = models.CharField(max_length=50,  blank=True, default='0')
+    # Credit the student holds against future fees. Modelled as a decimal, not
+    # a CharField like arrear_dues beside it: every use of this value is
+    # arithmetic against money, and parsing "1500.50" out of text is how
+    # rounding bugs get in. The column was added by hand and is still empty on
+    # all rows, so the type change costs nothing.
+    advance            = models.DecimalField(
+                            max_digits=10, decimal_places=2, default=0,
+                            help_text="Unused credit from advance payments, "
+                                      "applied automatically to future fees.")
 
     # Remarks
     remarks            = models.CharField(max_length=1000, blank=True)

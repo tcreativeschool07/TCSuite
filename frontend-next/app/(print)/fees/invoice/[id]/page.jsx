@@ -230,9 +230,24 @@ export default function InvoiceStudent() {
               <td className="label">Total Amount</td>
               <td className="value">Rs {Number(record.total_amount).toLocaleString()}</td>
             </tr>
+            {/* Credit the school already held. Shown as its own deduction so a
+                parent can see why less is being asked for than the total; it is
+                part of amount_paid, so the cash line below nets it out. */}
+            {num(record.advance_applied) > 0 && (
+              <tr className="amount-row">
+                <td className="label">Less: Advance Adjusted</td>
+                <td className="value" style={{ color: '#1E5C48' }}>
+                  - Rs {num(record.advance_applied).toLocaleString()}
+                </td>
+              </tr>
+            )}
             <tr className="amount-row">
-              <td className="label">Amount Paid</td>
-              <td className="value" style={{ color: '#16a34a' }}>Rs {Number(record.amount_paid).toLocaleString()}</td>
+              <td className="label">
+                {num(record.advance_applied) > 0 ? 'Amount Paid (cash)' : 'Amount Paid'}
+              </td>
+              <td className="value" style={{ color: '#16a34a' }}>
+                Rs {(num(record.amount_paid) - num(record.advance_applied)).toLocaleString()}
+              </td>
             </tr>
             {Number(record.balance) > 0 && (
               <tr className="balance-row amount-row">

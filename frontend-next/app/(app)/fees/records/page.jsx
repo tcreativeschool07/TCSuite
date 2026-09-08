@@ -93,6 +93,9 @@ function FeeRecordsInner() {
   const [advMonths, setAdvMonths]                 = useState([])
   const [advYear, setAdvYear]                     = useState(String(NOW.getFullYear()))
   const [advAmount, setAdvAmount]                 = useState('')
+  // A round sum held as credit, not tied to any month. Drawn down
+  // automatically by whichever months get generated next.
+  const [advCredit, setAdvCredit]                 = useState('')
   const [advRemarks, setAdvRemarks]               = useState('')
   const [advLoading, setAdvLoading]               = useState(false)
 
@@ -365,8 +368,13 @@ function FeeRecordsInner() {
 
   const handleAdvancePayment = async (e) => {
     e.preventDefault()
-    if (!advSelected.length || !advMonths.length) {
-      toast.error('Select at least one student and one month')
+    if (!advSelected.length) {
+      toast.error('Select at least one student')
+      return
+    }
+    // Months are optional now: an advance can be months, a credit, or both.
+    if (!advMonths.length && !Number(advCredit)) {
+      toast.error('Choose months to prepay, or enter a credit amount')
       return
     }
     setAdvLoading(true)
@@ -377,9 +385,14 @@ function FeeRecordsInner() {
         year: Number(advYear),
       }
       if (advAmount) payload.amount_paid = Number(advAmount)
+      if (Number(advCredit)) payload.advance_amount = Number(advCredit)
       if (advRemarks) payload.remarks = advRemarks
       const { data: res } = await advancePayment(payload)
-      toast.success(`Advance payment recorded — ${res.created} records created${res.skipped ? `, ${res.skipped} skipped` : ''}`)
+      const parts = []
+      if (res.created) parts.push(`${res.created} month(s) prepaid`)
+      if (res.credited) parts.push(`${rs(res.credited)} credited`)
+      if (res.skipped) parts.push(`${res.skipped} skipped`)
+      toast.success(`Advance recorded — ${parts.join(', ') || 'nothing to do'}`)
       if (res.errors?.length) {
         res.errors.forEach(err => toast.error(err))
       }
@@ -387,6 +400,7 @@ function FeeRecordsInner() {
       setAdvSelected([])
       setAdvMonths([])
       setAdvAmount('')
+      setAdvCredit('')
       setAdvRemarks('')
       load()
     } catch (err) {
@@ -442,6 +456,17 @@ function FeeRecordsInner() {
             : <span className="text-ink-3">0</span>}
         </td>
         <td className="num text-right text-[13px] font-medium">{rs(r.total_amount)}</td>
+        {/* What this month took from the student's credit, and what is left
+            of it — blank when the student has never held any. */}
+        <td className="num text-right text-[13px]">
+          {Number(r.advance_applied) > 0
+            ? <span className="text-accent font-medium">-{rs(r.advance_applied)}</span>
+            : Number(r.student_advance) > 0
+              ? <span className="text-ink-3" title="Credit still held by this student">
+                  {rs(r.student_advance)} left
+                </span>
+              : <span className="text-ink-3">—</span>}
+        </td>
         <td className="num text-right text-[13px] text-ok">{rs(r.amount_paid)}</td>
         <td className="num text-right text-[13px]">
           {Number(r.balance) > 0
@@ -504,6 +529,7 @@ function FeeRecordsInner() {
         <th className="text-right">Fee</th>
         <th className="text-right">Misc.</th>
         <th className="text-right">Total</th>
+        <th className="text-right">Advance</th>
         <th className="text-right">Paid</th>
         <th className="text-right">Balance</th>
         <th>Status</th>
@@ -1062,11 +1088,39 @@ function FeeRecordsInner() {
                 )
               })}
             </div>
-            {advMonths.length > 0 && (
+            {advMonths.length > 0 ? (
               <p className="text-[13px] text-accent mt-1.5">
                 {advMonths.length} month(s) selected: {advMonths.map(m => MONTHS.find(x => x.v === m)?.l.substring(0, 3)).join(', ')}
               </p>
+            ) : (
+              <p className="text-[12.5px] text-ink-3 mt-1.5">
+                Optional — leave every month unselected to just hold the money
+                as credit.
+              </p>
             )}
+          </div>
+
+          {/* Credit: a round sum that does not divide neatly into months */}
+          <div>
+            <label className="label" htmlFor="adv-credit">
+              Credit amount <span className="text-ink-3 font-normal">(any amount, no month needed)</span>
+            </label>
+            <input
+              id="adv-credit"
+              className="input"
+              type="number" min="0" step="1"
+              placeholder="e.g. 10000"
+              value={advCredit}
+              onChange={e => setAdvCredit(e.target.value)}
+            />
+            <p className="text-[12.5px] text-ink-3 mt-1.5">
+              Held against the student and deducted automatically from the next
+              months generated, until it runs out.
+              {Number(advCredit) > 0 && advSelected.length > 0 && (
+                <> Crediting <strong className="text-ink-2">{rs(Number(advCredit))}</strong> to{' '}
+                <strong className="text-ink-2">{advSelected.length}</strong> student(s).</>
+              )}
+            </p>
           </div>
 
           {/* Amount override */}
@@ -1104,7 +1158,8 @@ function FeeRecordsInner() {
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" className="btn btn-secondary" onClick={() => setAdvModal(false)}>Cancel</button>
             <button type="submit"
-              disabled={advLoading || !advSelected.length || !advMonths.length}
+              disabled={advLoading || !advSelected.length
+                        || (!advMonths.length && !Number(advCredit))}
               className="btn btn-primary">
               {advLoading ? (<><Spinner /> Processing…</>) : 'Record advance payment'}
             </button>

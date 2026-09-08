@@ -80,9 +80,11 @@ DUE_H      = 14      # each closing line under the table (due date / paid on)
 
 def _money(v):
     try:
-        return f"{int(round(float(v or 0))):,}"
+        n = int(round(float(v or 0)))
     except (TypeError, ValueError):
         return "0"
+    # Deductions are stored negative so the column still sums to the total.
+    return f"-{abs(n):,}" if n < 0 else f"{n:,}"
 
 
 def _f(v):
@@ -189,11 +191,21 @@ def _receipt_rows(record, arrear_cap=None):
     rows += [(label, amount, 'arrear')
              for label, amount in _arrear_rows(record, arrear_cap)]
 
-    rows += [
-        ('Total due',   _f(record.get('total_amount')), 'total'),
-        ('Amount paid', _f(record.get('amount_paid')),  'paid'),
-        ('Balance due', _f(record.get('balance')),      'balance'),
-    ]
+    rows.append(('Total due', _f(record.get('total_amount')), 'total'))
+
+    # Credit the school was already holding, shown as its own deduction so a
+    # parent can see why they are being asked for less than the total. It is
+    # part of amount_paid, so the cash line below nets it out.
+    advance = _f(record.get('advance_applied'))
+    if advance > 0:
+        rows.append(('Less: advance adjusted', -advance, 'advance'))
+        cash = _f(record.get('amount_paid')) - advance
+        if cash > 0:
+            rows.append(('Amount paid', cash, 'paid'))
+    else:
+        rows.append(('Amount paid', _f(record.get('amount_paid')), 'paid'))
+
+    rows.append(('Balance due', _f(record.get('balance')), 'balance'))
     return rows
 
 
@@ -334,6 +346,8 @@ def _draw_receipt(c, x, y, w, h, record):
             c.setFillColor(DANGER if amount > 0 else ACCENT)
         elif kind == 'arrear':
             c.setFillColor(INK_SOFT)
+        elif kind == 'advance':
+            c.setFillColor(ACCENT)
         else:
             c.setFillColor(INK)
         c.setFont(font, 7.5)

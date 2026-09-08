@@ -10,6 +10,7 @@ from django.db import transaction, connection
 from django.db.models import Sum, Count, Q
 from django.db.models.functions import Lower
 from django.utils.dateparse import parse_date
+from django.utils import timezone
 from decimal import Decimal
 from .models import (
     ClassRoom, AcademicYear, FeeStructure, FeeRecord, SavedBalanceSheet,
@@ -35,6 +36,7 @@ from students.models import StudentProfile
 from students.serializers import StudentFeeInfoSerializer
 from .ledger import (
     opening_balance, recompute_chain, arrears_breakdown, outstanding_items,
+    take_advance, student_advance,
 )
 
 # Advisory-lock key guarding receipt-number allocation during bulk generation.
@@ -278,6 +280,7 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
         for s in students:
             entry = {
                 'id': s.id, 'admission_no': s.admission_no,
+                'advance': float(s.advance or 0),
                 'student_name': s.student_name, 'f_g_name': s.f_g_name,
                 'f_g_contact': s.f_g_contact,
                 'current_fee': float(s.current_fee) if s.current_fee else None,
@@ -295,6 +298,7 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
                     'amount_paid': float(rec.amount_paid),
                     'balance': float(rec.balance),
                     'status': rec.status, 'is_late': rec.is_late, 'is_advance': rec.is_advance,
+                    'advance_applied': float(rec.advance_applied or 0),
                     'misc_charges': float(rec.misc_charges),
                     'due_date': str(rec.due_date) if rec.due_date else None,
                     'payment_date': str(rec.payment_date) if rec.payment_date else None,
@@ -559,6 +563,9 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
         skipped   = 0
         errors    = []
         per_class = {}
+        advanced_students = []          # credit drawn down, written in one batch
+        applied_advance   = Decimal(0)
+        today = timezone.now().date()
 
         # Receipt numbers are allocated from a single running sequence, and the
         # (student, month, year) pair is unique — so two runs launched together
@@ -597,6 +604,15 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
                 misc  = misc_by_student.get(student.id) or Decimal(0)
                 total = arrear + fee + misc
 
+                # Any credit the student is holding pays this month down as the
+                # record is created, so they are never billed for money the
+                # school already has. take_advance only adjusts the in-memory
+                # student; the whole batch is written once below.
+                used_advance = take_advance(student, total)
+                if used_advance > 0:
+                    advanced_students.append(student)
+                balance = total - used_advance
+
                 seq += 1
                 to_create.append(FeeRecord(
                     receipt_no=format_receipt_no(year, seq),
@@ -606,22 +622,33 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
                     previous_balance=arrear,
                     current_fee=fee,
                     misc_charges=misc,
-                    amount_paid=0,
+                    amount_paid=used_advance,
+                    advance_applied=used_advance,
                     # bulk_create bypasses FeeRecord.save(), so mirror what it would
-                    # have computed for a brand-new, unpaid record.
+                    # have computed — including the split of what the advance paid.
                     total_amount=total,
-                    balance=total,
-                    status='unpaid',
+                    balance=balance,
+                    status=('paid' if balance <= 0 else
+                            'partial' if used_advance > 0 else 'unpaid'),
+                    payment_date=today if used_advance > 0 else None,
                     due_date=d.get('due_date'),
                 ))
+                if used_advance > 0:
+                    to_create[-1].allocate_payment()
                 bucket['created'] += 1
 
             if to_create:
                 FeeRecord.objects.bulk_create(to_create, batch_size=200)
+            if advanced_students:
+                StudentProfile.objects.bulk_update(advanced_students, ['advance'])
+
+        applied_advance = sum((r.advance_applied for r in to_create), Decimal(0))
 
         return Response({
             'created':  len(to_create),
             'skipped':  skipped,
+            'advance_applied': float(applied_advance),
+            'advance_students': len(advanced_students),
             'errors':   errors,
             'total_students': len(students),
             'scope': 'all-classes' if not current_class else current_class,
@@ -731,6 +758,16 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
         created = 0
         skipped = 0
         errors  = []
+        credited = Decimal(0)
+
+        # A bare credit amount is held on the student and drawn down by whatever
+        # months get generated next — no records are created for it here.
+        credit = d.get('advance_amount') or Decimal(0)
+        if credit > 0:
+            for student in students:
+                student.advance = student_advance(student) + credit
+            StudentProfile.objects.bulk_update(list(students), ['advance'])
+            credited = credit * students.count()
 
         for student in students:
             fee = None
@@ -748,7 +785,7 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
                     errors.append(f"No fee for {student.student_name} (#{student.admission_no})")
                     continue
 
-            for month in d['months']:
+            for month in (d.get('months') or []):
                 if FeeRecord.objects.filter(student=student, month=month, year=d['year']).exists():
                     skipped += 1
                     continue
@@ -771,17 +808,19 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
         record_ids = list(
             FeeRecord.objects.filter(
                 student__in=students,
-                month__in=d['months'],
+                month__in=(d.get('months') or []),
                 year=d['year'],
                 is_advance=True,
             ).values_list('id', flat=True)
-        )
+        ) if d.get('months') else []
 
         return Response({
             'created': created,
             'skipped': skipped,
             'errors': errors,
             'record_ids': record_ids,
+            'credited': float(credited),
+            'credited_each': float(credit),
         })
 
     # Distinct Years 

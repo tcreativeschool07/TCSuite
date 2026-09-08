@@ -44,6 +44,9 @@ class FeeRecordListSerializer(serializers.ModelSerializer):
     month_name    = serializers.CharField(source='get_month_display',     read_only=True)
     f_g_name      = serializers.CharField(source='student.f_g_name',     read_only=True)
     f_g_contact   = serializers.CharField(source='student.f_g_contact',  read_only=True)
+    # The credit still held, so a list row can show it beside what this record used.
+    student_advance = serializers.DecimalField(
+        source='student.advance', max_digits=10, decimal_places=2, read_only=True)
     receipt_display = serializers.SerializerMethodField()
 
     class Meta:
@@ -55,6 +58,7 @@ class FeeRecordListSerializer(serializers.ModelSerializer):
             'month', 'month_name', 'year',
             'previous_balance', 'current_fee', 'total_amount',
             'amount_paid', 'balance', 'status', 'is_advance', 'misc_charges',
+            'advance_applied', 'student_advance',
             'paid_previous_balance', 'paid_current_fee', 'paid_misc_charges',
             'is_late', 'late_paid_on',
             'due_date', 'payment_date', 'receipt_date',
@@ -79,6 +83,7 @@ class FeeRecordDetailSerializer(serializers.ModelSerializer):
             'student', 'month', 'month_name', 'year',
             'previous_balance', 'current_fee', 'total_amount',
             'amount_paid', 'balance', 'status', 'is_advance', 'misc_charges',
+            'advance_applied',
             'paid_previous_balance', 'paid_current_fee', 'paid_misc_charges',
             'is_late', 'late_paid_on',
             'receipt_date', 'due_date', 'payment_date',
@@ -100,6 +105,11 @@ class FeeRecordCreateSerializer(serializers.ModelSerializer):
             'previous_balance', 'current_fee', 'misc_charges',
             'amount_paid', 'due_date', 'remarks',
         ]
+        # validate() below resolves the fee from the student's override or the
+        # class fee structure, but DRF's field-level check ran first and
+        # rejected the request before it could — so that fallback was
+        # unreachable unless the caller sent an explicit 0.
+        extra_kwargs = {'current_fee': {'required': False}}
 
     def validate(self, data):
         student = data.get('student')
@@ -136,6 +146,27 @@ class FeeRecordCreateSerializer(serializers.ModelSerializer):
             )
 
         return data
+
+
+    def create(self, validated_data):
+        """Apply the student's advance credit, as bulk-generate does.
+
+        Without this a record made one-off would bill a student for money the
+        school is already holding, and the two creation paths would disagree.
+        """
+        from .ledger import take_advance
+        student = validated_data['student']
+        record = FeeRecord(**validated_data)
+        total = ((record.previous_balance or 0) + (record.current_fee or 0)
+                 + (record.misc_charges or 0))
+        already_paid = record.amount_paid or 0
+        used = take_advance(student, max(0, total - already_paid))
+        if used > 0:
+            record.advance_applied = used
+            record.amount_paid = already_paid + used
+            student.save(update_fields=['advance'])
+        record.save()
+        return record
 
 
 class FeeRecordEditSerializer(serializers.ModelSerializer):
@@ -305,6 +336,7 @@ class FeeInvoiceSerializer(serializers.ModelSerializer):
             'student', 'month', 'month_name', 'year',
             'previous_balance', 'current_fee', 'total_amount',
             'amount_paid', 'balance', 'status', 'is_advance', 'misc_charges',
+            'advance_applied',
             'receipt_date', 'due_date', 'payment_date', 'remarks',
         ]
 
@@ -335,15 +367,39 @@ class BulkGenerateSerializer(serializers.Serializer):
 
 
 class AdvancePaymentSerializer(serializers.Serializer):
-    student_ids  = serializers.ListField(
+    """An advance payment, taken either of two ways.
+
+    * Pick months — prepays those specific months, creating a settled record for
+      each, as before.
+    * Enter a credit amount with no months — the money sits on the student as
+      credit and is drawn down automatically by whichever months are generated
+      next. This is the case where a parent hands over a round sum that does not
+      divide neatly into months.
+
+    Both are allowed at once; months are prepaid first and any credit is added
+    on top.
+    """
+    student_ids     = serializers.ListField(
         child=serializers.IntegerField(), min_length=1)
-    months       = serializers.ListField(
-        child=serializers.IntegerField(min_value=1, max_value=12), min_length=1)
-    year         = serializers.IntegerField(min_value=2020, max_value=2099)
-    amount_paid  = serializers.DecimalField(
+    # No longer required: an advance need not be tied to particular months.
+    months          = serializers.ListField(
+        child=serializers.IntegerField(min_value=1, max_value=12),
+        required=False, default=list)
+    year            = serializers.IntegerField(min_value=2020, max_value=2099)
+    amount_paid     = serializers.DecimalField(
         max_digits=10, decimal_places=2, required=False, allow_null=True)
-    due_date     = serializers.DateField(required=False, allow_null=True)
-    remarks      = serializers.CharField(required=False, allow_blank=True, default='')
+    # The arbitrary sum to hold as credit.
+    advance_amount  = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True,
+        min_value=0)
+    due_date        = serializers.DateField(required=False, allow_null=True)
+    remarks         = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate(self, attrs):
+        if not attrs.get('months') and not attrs.get('advance_amount'):
+            raise serializers.ValidationError(
+                "Choose at least one month to prepay, or enter a credit amount.")
+        return attrs
 
 
 class CustomReceiptItemSerializer(serializers.Serializer):

@@ -696,7 +696,7 @@ export default function FeeDashboard() {
                             <EmptyState message="No students in this class." />
                           ) : (
                             <div className="overflow-x-auto">
-                              <table className="ledger min-w-[1000px]">
+                              <table className="ledger min-w-[1100px]">
                                 <thead>
                                   <tr>
                                     <th>Admission no.</th>
@@ -707,6 +707,7 @@ export default function FeeDashboard() {
                                     <th className="text-right">Fee</th>
                                     <th className="text-right">Misc.</th>
                                     <th className="text-right">Total</th>
+                                    <th className="text-right">Advance</th>
                                     <th className="text-right">Paid</th>
                                     <th className="text-right">Balance</th>
                                     <th>Status</th>
@@ -741,6 +742,14 @@ export default function FeeDashboard() {
                                                 : <span className="text-ink-3">0</span>}
                                             </td>
                                             <td className="num text-right text-[13px] font-medium">{rs(r.total_amount)}</td>
+                                            {/* Credit this month consumed, or what is still held. */}
+                                            <td className="num text-right text-[13px]">
+                                              {Number(r.advance_applied) > 0
+                                                ? <span className="text-accent font-medium">-{rs(r.advance_applied)}</span>
+                                                : Number(s.advance) > 0
+                                                  ? <span className="text-ink-3" title="Credit still held">{rs(s.advance)} left</span>
+                                                  : <span className="text-ink-3">0</span>}
+                                            </td>
                                             <td className="num text-right text-[13px] text-ok">{rs(r.amount_paid)}</td>
                                             <td className="num text-right text-[13px]">
                                               {r.balance > 0
@@ -755,8 +764,13 @@ export default function FeeDashboard() {
                                             </td>
                                           </>
                                         ) : (
-                                          <td colSpan={7} className="text-center text-[13px] text-warn italic">
+                                          <td colSpan={8} className="text-center text-[13px] text-warn italic">
                                             No fee record for this period
+                                            {Number(s.advance) > 0 && (
+                                              <span className="text-accent not-italic">
+                                                {' '}· {rs(s.advance)} credit available
+                                              </span>
+                                            )}
                                           </td>
                                         )}
                                       </tr>
