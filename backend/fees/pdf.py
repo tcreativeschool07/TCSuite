@@ -75,7 +75,7 @@ FIELD_H    = 11.5    # one student-detail row
 HEAD_H     = 32      # school name + subtitle + rule
 FOOT_H     = 26      # signature strip + footnote
 TABLE_HEAD = 13      # the Description/Amount rule
-DUE_H      = 14      # the 'Due date' line under the table, when there is one
+DUE_H      = 14      # each closing line under the table (due date / paid on)
 
 
 def _money(v):
@@ -197,11 +197,24 @@ def _receipt_rows(record, arrear_cap=None):
     return rows
 
 
+def _closing_lines(record):
+    """The lines under the money table: the deadline, and the date paid.
+
+    "Due date" is dropped once nothing is owed — a settled receipt should lead
+    with when it was paid, not with a deadline that no longer applies.
+    """
+    lines = []
+    if record.get('due_date') and _f(record.get('balance')) > 0:
+        lines.append(('Due date', _fmt_date(record['due_date']), 'due'))
+    if record.get('payment_date'):
+        lines.append(('Paid on', _fmt_date(record['payment_date']), 'paid'))
+    return lines
+
+
 def _receipt_height(record, arrear_cap=None):
     """Points this receipt needs. Drives the quarter-page vs half-page choice."""
     table   = TABLE_HEAD + len(_receipt_rows(record, arrear_cap)) * ROW_H + 8
-    if record.get('due_date'):
-        table += DUE_H
+    table  += len(_closing_lines(record)) * DUE_H
     details = 5 * FIELD_H + 4
     return PAD * 2 + HEAD_H + max(table, details) + FOOT_H
 
@@ -209,8 +222,7 @@ def _receipt_height(record, arrear_cap=None):
 def _arrear_cap_for(record, height):
     """Most arrears lines that fit in `height`; None when they all do."""
     room = height - (PAD * 2 + HEAD_H + FOOT_H + TABLE_HEAD + 8)
-    if record.get('due_date'):
-        room -= DUE_H
+    room -= len(_closing_lines(record)) * DUE_H
     # The rows that are always there — this month's billing plus the three
     # totals. Counted from the built rows so it can't drift out of step with
     # _receipt_height(), which sizes the box from the same list.
@@ -253,7 +265,8 @@ def _draw_receipt(c, x, y, w, h, record):
     c.drawRightString(right, top - 10, _fmt_receipt(record.get('receipt_no')))
     c.setFillColor(INK_SOFT)
     c.setFont('Helvetica', 6.5)
-    c.drawRightString(right, top - 20.5, f"Issued {record.get('receipt_date', '') or ''}")
+    c.drawRightString(right, top - 20.5,
+                      f"Issued {_fmt_date(record.get('receipt_date'))}")
 
     rule_y = top - 27
     c.setStrokeColor(ACCENT)
@@ -326,19 +339,18 @@ def _draw_receipt(c, x, y, w, h, record):
         c.setFont(font, 7.5)
         c.drawRightString(right, baseline, _money(amount))
 
-    # The deadline the receipt is asking the parent to meet — it reads as the
-    # last line of the money table, under the balance, which is where the eye
-    # lands. It used to be 5.5pt grey in the footnote, effectively invisible.
-    due = _fmt_date(record.get('due_date'))
-    if due:
+    # The deadline to meet, and the day it was settled. These read as the last
+    # lines of the money table, under the balance, which is where the eye lands
+    # — both used to be 5.5pt grey in the footnote, effectively invisible.
+    for label, value, kind in _closing_lines(record):
         ty -= DUE_H
         baseline = ty + 4
         c.setFillColor(INK_SOFT)
         c.setFont('Helvetica', 7)
-        c.drawString(table_x0, baseline, 'Due date')
-        c.setFillColor(DANGER if _f(record.get('balance')) > 0 else INK)
+        c.drawString(table_x0, baseline, label)
+        c.setFillColor(DANGER if kind == 'due' else ACCENT)
         c.setFont('Helvetica-Bold', 7.5)
-        c.drawRightString(right, baseline, due)
+        c.drawRightString(right, baseline, value)
 
     # Signatures + footnote
     sig_y = y + PAD + 12
@@ -352,11 +364,8 @@ def _draw_receipt(c, x, y, w, h, record):
     c.drawString(left, sig_y, 'Parent / Guardian')
     c.drawString(left + 104, sig_y, 'Accounts Officer')
 
-    # The due date has its own line above now, so it is not repeated here.
-    notes = []
-    if record.get('payment_date'):
-        notes.append(f"Paid {_fmt_date(record['payment_date'])}")
-    notes.append('Computer-generated receipt')
+    # Due date and payment date both have their own lines above now.
+    notes = ['Computer-generated receipt']
     c.setFillColor(colors.HexColor('#9A9F97'))
     c.setFont('Helvetica', 5.5)
     c.drawRightString(right, sig_y, '  ·  '.join(notes))

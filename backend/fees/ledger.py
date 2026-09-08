@@ -282,6 +282,9 @@ def route_arrears_payment(record, amount, target=None, today=None):
         if mark_late:
             r.is_late = True
             r.late_paid_on = today
+        # This is the day that month was actually settled, which is what its
+        # receipt should show — not the day the arrears first appeared.
+        r.payment_date = today
         r.amount_paid = r.allocation_total()
         r.save()
         written.append(r)
@@ -350,6 +353,9 @@ def route_arrears_allocations(record, allocations, today=None):
         if mark_late:
             r.is_late = True
             r.late_paid_on = today
+        # This is the day that month was actually settled, which is what its
+        # receipt should show — not the day the arrears first appeared.
+        r.payment_date = today
         r.amount_paid = r.allocation_total()
         r.save()
         written.append(r)

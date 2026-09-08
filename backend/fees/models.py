@@ -209,7 +209,14 @@ class FeeRecord(models.Model):
             else:
                 self.status = 'partial'
 
-        if self.status in ('paid', 'advance') and not self.payment_date:
+        # When the money was received. This used to be set only once a record
+        # was fully settled, so a partial payment left no record of the date it
+        # came in at all. Any payment now stamps it; the first one wins, and the
+        # payment flow overwrites it with the date of the payment being applied.
+        if (self.amount_paid or 0) > 0 and not self.payment_date:
+            from django.utils import timezone
+            self.payment_date = timezone.now().date()
+        elif self.status == 'advance' and not self.payment_date:
             from django.utils import timezone
             self.payment_date = timezone.now().date()
 

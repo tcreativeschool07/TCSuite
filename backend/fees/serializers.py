@@ -278,6 +278,12 @@ class FeePaymentSerializer(serializers.ModelSerializer):
                 instance.late_paid_on = date.today()
             # save() leaves an allocation that already sums to amount_paid alone.
             instance.amount_paid = instance.allocation_total()
+            # The receipt should show when *this* payment was taken, so a later
+            # instalment moves the date on rather than keeping the first one.
+            # An explicit payment_date in the request still wins (handled below).
+            if own_paid > 0 and 'payment_date' not in validated_data:
+                from datetime import date
+                instance.payment_date = date.today()
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
