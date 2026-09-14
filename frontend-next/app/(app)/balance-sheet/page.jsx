@@ -159,13 +159,27 @@ export default function BalanceSheet() {
                     { label: 'Total students', value: ys.total_students, cls: 'text-ink' },
                     { label: 'Records', value: ys.total_records, cls: 'text-ink' },
                     { label: 'Total fee', value: fmt(ys.total_fee), cls: 'text-ink' },
-                    { label: 'Total due', value: fmt(ys.total_due), cls: 'text-ink' },
-                    { label: 'Collected', value: fmt(ys.total_collected), cls: 'text-ok' },
-                    { label: 'Outstanding', value: fmt(ys.total_balance), cls: 'text-danger' },
+                    // The first two are flows over the year — what was demanded
+                    // and what came in. "Billed" counts arrears again in each
+                    // month they were re-billed, which is why it is not the
+                    // debt. "Still owed" is the position at year end, so
+                    // billed minus collected deliberately will not equal it.
+                    { label: 'Billed', value: fmt(ys.total_due), cls: 'text-ink',
+                      hint: 'Demands raised, including arrears re-billed each month' },
+                    { label: 'Collected', value: fmt(ys.total_collected), cls: 'text-ok',
+                      hint: 'Money received during the year' },
+                    { label: 'Still owed', value: fmt(ys.total_outstanding ?? ys.total_balance),
+                      cls: 'text-danger',
+                      hint: ys.students_owing
+                        ? `${ys.students_owing} students, counted once each`
+                        : 'Outstanding at year end' },
                   ].map(item => (
                     <div key={item.label}>
                       <p className="text-[13px] text-ink-2">{item.label}</p>
                       <p className={`num text-[17px] font-semibold mt-0.5 ${item.cls}`}>{item.value}</p>
+                      {item.hint && (
+                        <p className="text-[11.5px] text-ink-3 mt-0.5 leading-snug">{item.hint}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -249,7 +263,14 @@ export default function BalanceSheet() {
                       <td className="num text-right text-warn">{fmt(data.monthly.reduce((s, m) => s + m.prev_balance, 0))}</td>
                       <td className="num text-right">{fmt(data.monthly.reduce((s, m) => s + m.total_due, 0))}</td>
                       <td className="num text-right text-ok">{fmt(data.monthly.reduce((s, m) => s + m.total_collected, 0))}</td>
-                      <td className="num text-right text-danger">{fmt(data.monthly.reduce((s, m) => s + m.total_balance, 0))}</td>
+                      {/* Sum of the monthly closing balances. Each month is
+                          correct on its own, but adding them counts arrears
+                          once per month they were carried — the true figure
+                          is "Still owed" above. */}
+                      <td className="num text-right text-ink-3"
+                          title="Sum of monthly balances — arrears appear in each month they were carried. See 'Still owed' above for the actual debt.">
+                        {fmt(data.monthly.reduce((s, m) => s + m.total_balance, 0))}
+                      </td>
                       <td className="num text-center">
                         {data.yearly_summary ? `${data.yearly_summary.collection_rate}%` : '—'}
                       </td>

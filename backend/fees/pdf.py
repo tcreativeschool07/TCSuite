@@ -487,9 +487,11 @@ def generate_balance_sheet_pdf(data):
 
     # Annual Summary 
     story.append(Paragraph("Annual Summary", ss['SectionHead']))
+    # "Billed" and "Collected" are flows over the year; "Still Owed" is the
+    # position at year end, so the first two do not subtract to the third.
     sum_data = [
         ['Total Students', 'Total Records', 'Total Fee', 'Arrears Carried',
-         'Total Due', 'Collected', 'Outstanding', 'Collection Rate'],
+         'Billed', 'Collected', 'Still Owed', 'Collection Rate'],
         [
             str(ys.get('total_students', 0)),
             str(ys.get('total_records', 0)),
@@ -497,7 +499,7 @@ def generate_balance_sheet_pdf(data):
             _num(ys.get('total_prev_balance', 0)),
             _num(ys.get('total_due', 0)),
             _num(ys.get('total_collected', 0)),
-            _num(ys.get('total_balance', 0)),
+            _num(ys.get('total_outstanding', ys.get('total_balance', 0))),
             f"{ys.get('collection_rate', 0)}%",
         ],
     ]

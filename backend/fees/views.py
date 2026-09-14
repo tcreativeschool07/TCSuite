@@ -116,6 +116,44 @@ def attachment(content, filename, content_type):
     return response
 
 
+# The ledger's rule for what a student still owes, expressed once in SQL:
+# unpaid legacy arrears, plus what each period still owes *for itself*. Summing
+# the `balance` column instead would double count, because an unpaid month is
+# re-billed in the next month's previous_balance. Must stay in step with
+# own_outstanding()/legacy_remaining() in fees/ledger.py.
+OUTSTANDING_SQL = """
+    WITH per_student AS (
+        SELECT student_id,
+               SUM(CASE WHEN status IN ('waived', 'advance') THEN 0
+                        ELSE GREATEST(current_fee  - paid_current_fee,  0)
+                           + GREATEST(misc_charges - paid_misc_charges, 0)
+                   END) AS own_out,
+               (ARRAY_AGG(previous_balance ORDER BY year, month, id))[1] AS seed,
+               SUM(paid_previous_balance) AS paid_seed
+          FROM fees_feerecord
+         {where}
+         GROUP BY student_id
+    )
+    SELECT COUNT(*) FILTER (WHERE own_out + GREATEST(seed - paid_seed, 0) > 0),
+           COALESCE(SUM(own_out + GREATEST(seed - paid_seed, 0)), 0),
+           COALESCE(SUM(own_out), 0),
+           COALESCE(SUM(GREATEST(seed - paid_seed, 0)), 0)
+      FROM per_student
+"""
+
+
+def outstanding_position(where='', params=()):
+    """(students_owing, total, period_dues, legacy_dues) for the matched records.
+
+    Scope it with a WHERE clause — no clause for the school's whole standing
+    position, `WHERE year = %s` for where a single year finished.
+    """
+    with connection.cursor() as cur:
+        cur.execute(OUTSTANDING_SQL.format(where=where), params)
+        owing, total, own, legacy = cur.fetchone()
+    return int(owing), float(total), float(own), float(legacy)
+
+
 def custom_receipt_payload(receipt):
     """Shape a CustomReceipt like an invoice record so it prints through the
     same receipt renderer. `custom_items` is what tells the renderer to print
@@ -1018,29 +1056,7 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
         walk 584 students in Python. See own_outstanding()/legacy_remaining()
         in fees/ledger.py; this must stay in step with them.
         """
-        with connection.cursor() as cur:
-            cur.execute("""
-                WITH per_student AS (
-                    SELECT student_id,
-                           SUM(CASE WHEN status IN ('waived', 'advance') THEN 0
-                                    ELSE GREATEST(current_fee  - paid_current_fee,  0)
-                                       + GREATEST(misc_charges - paid_misc_charges, 0)
-                               END) AS own_out,
-                           -- the earliest record's previous_balance is the only
-                           -- arrears figure never re-derived: the seed
-                           (ARRAY_AGG(previous_balance ORDER BY year, month, id))[1] AS seed,
-                           SUM(paid_previous_balance) AS paid_seed
-                      FROM fees_feerecord
-                     GROUP BY student_id
-                )
-                SELECT COUNT(*) FILTER (
-                           WHERE own_out + GREATEST(seed - paid_seed, 0) > 0),
-                       COALESCE(SUM(own_out + GREATEST(seed - paid_seed, 0)), 0),
-                       COALESCE(SUM(own_out), 0),
-                       COALESCE(SUM(GREATEST(seed - paid_seed, 0)), 0)
-                  FROM per_student
-            """)
-            students_owing, total_dues, own_dues, legacy_dues = cur.fetchone()
+        students_owing, total_dues, own_dues, legacy_dues = outstanding_position()
 
         total_students = StudentProfile.objects.exclude(withdrawn='yes').count()
         return Response({
@@ -1162,6 +1178,8 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             partial=Count('id', filter=Q(status='partial')),
         )
         total_students = StudentProfile.objects.exclude(withdrawn='yes').count()
+        y_students_owing, y_outstanding, _, _ = outstanding_position(
+            'WHERE year = %s', [year])
         y_due = float(yearly_agg['total_due'] or 0)
         y_collected = float(yearly_agg['total_collected'] or 0)
 
@@ -1172,10 +1190,23 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
                 'total_records': yearly_agg['total_records'],
                 'total_fee': float(yearly_agg['total_fee'] or 0),
                 'total_prev_balance': float(yearly_agg['prev_balance'] or 0),
+                # Flow figures — what was demanded and what came in over the
+                # year. `total_due` counts arrears again each month they were
+                # re-billed, which is what makes it a billing figure rather
+                # than a debt; `total_collected` counts each rupee once,
+                # because a payment is recorded against the month it settles.
                 'total_due': y_due,
                 'total_collected': y_collected,
-                'total_balance': float(yearly_agg['total_balance'] or 0),
                 'collection_rate': round(y_collected / (y_due or 1) * 100, 1) if y_due else 0,
+                # Position at year end — what is genuinely still owed. Kept
+                # separate from the flows on purpose: billed minus collected
+                # is inflated by re-billing and is not a debt. `total_balance`
+                # is retained under its old name for the saved snapshots and
+                # the PDF, but now carries the true figure.
+                'total_balance': y_outstanding,
+                'total_outstanding': y_outstanding,
+                'students_owing': y_students_owing,
+                'billed_minus_collected': float(yearly_agg['total_balance'] or 0),
                 'paid': yearly_agg['paid'],
                 'unpaid': yearly_agg['unpaid'],
                 'partial': yearly_agg['partial'],
