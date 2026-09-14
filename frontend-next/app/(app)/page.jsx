@@ -18,6 +18,9 @@ import { Icon } from '@/src/components/icons'
 import { KpiGridSkeleton, TableSkeleton, EmptyState } from '@/src/components/Skeleton'
 
 const rs = (v) => `Rs ${Number(v).toLocaleString()}`
+// " (33%)" — omitted when there is nothing to take a share of.
+const pct = (part, whole) =>
+  whole > 0 ? ` · ${Math.round((Number(part) / Number(whole)) * 100)}%` : ''
 const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : String(n))
 
 const quickActions = [
@@ -70,7 +73,7 @@ export default function Dashboard() {
 
       {/* KPI grid */}
       {loading ? (
-        <KpiGridSkeleton count={7} />
+        <KpiGridSkeleton count={11} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <StatCard
@@ -153,6 +156,60 @@ export default function Dashboard() {
             sub="Arrears recovered this month"
             color="yellow"
             icon={<Icon name="report" size={18} />}
+          />
+          <StatCard
+            title="Charges collected"
+            value={
+              stats?.collected_misc_charges != null
+                ? <CountUp value={Number(stats.collected_misc_charges)} format={(v) => rs(v)} />
+                : '—'
+            }
+            sub={
+              stats?.with_charges_count
+                ? `${stats.with_charges_count} student${stats.with_charges_count === 1 ? '' : 's'} charged`
+                : 'Books, diaries and the rest'
+            }
+            color="blue"
+            icon={<Icon name="plus" size={18} />}
+          />
+
+          {/* Head counts. These read the payment split rather than `status`,
+              because status describes the whole record — a student who has
+              cleared this month's fee but still owes arrears is "partial", and
+              would otherwise not be counted as having paid the fee at all. */}
+          <StatCard
+            title={`Paid ${monthName} fee`}
+            value={<CountUp value={stats?.paid_fee_count ?? null} />}
+            sub={
+              stats?.total_records
+                ? `of ${stats.total_records} billed${pct(stats.paid_fee_count, stats.total_records)}`
+                : 'Students who settled this month'
+            }
+            color="green"
+            icon={<Icon name="students" size={18} />}
+          />
+          <StatCard
+            title="Cleared pending dues"
+            value={<CountUp value={stats?.cleared_arrears_count ?? null} />}
+            sub={
+              stats?.with_arrears_count
+                ? `of ${stats.with_arrears_count} carrying arrears${pct(stats.cleared_arrears_count, stats.with_arrears_count)}`
+                : 'Nobody is carrying arrears'
+            }
+            color="teal"
+            icon={<Icon name="calculator" size={18} />}
+          />
+          <StatCard
+            title="Defaulters"
+            value={<CountUp value={stats?.defaulter_count ?? null} />}
+            sub={
+              stats?.total_records
+                ? `still owe something${pct(stats.defaulter_count, stats.total_records)}`
+                : 'Nothing outstanding'
+            }
+            color="red"
+            icon={<Icon name="report" size={18} />}
+            href="/fees/defaulters"
           />
         </div>
       )}

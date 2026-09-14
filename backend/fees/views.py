@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.http import HttpResponse
 from django.db import transaction, connection
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F
 from django.db.models.functions import Lower
 from django.utils.dateparse import parse_date
 from django.utils import timezone
@@ -947,13 +947,28 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             # split across these three buckets as it is recorded, and they add
             # back up to total_collected — so a caller can show this period's
             # own tuition separately from arrears recovered against it.
-            paid_current_fee=Sum('paid_current_fee'),
-            paid_previous_balance=Sum('paid_previous_balance'),
-            paid_misc_charges=Sum('paid_misc_charges'),
-            advance_applied=Sum('advance_applied'),
+            # Aliased away from the column names on purpose: an alias that
+            # matches a field shadows it, and the head-count filters below
+            # compare against those same columns.
+            sum_paid_fee=Sum('paid_current_fee'),
+            sum_paid_arrears=Sum('paid_previous_balance'),
+            sum_paid_charges=Sum('paid_misc_charges'),
+            sum_advance_applied=Sum('advance_applied'),
             unpaid_count=Count('id', filter=Q(status='unpaid')),
             partial_count=Count('id', filter=Q(status='partial')),
             paid_count=Count('id', filter=Q(status='paid')),
+            # Head counts, asked of the payment split rather than of `status`:
+            # status is about the record as a whole, so a student who has
+            # cleared this month's fee but still owes arrears reads as
+            # "partial" and would be invisible in every one of these.
+            paid_fee_count=Count('id', filter=Q(paid_current_fee__gte=F('current_fee'))),
+            with_arrears_count=Count('id', filter=Q(previous_balance__gt=0)),
+            cleared_arrears_count=Count('id', filter=Q(previous_balance__gt=0)
+                                        & Q(paid_previous_balance__gte=F('previous_balance'))),
+            with_charges_count=Count('id', filter=Q(misc_charges__gt=0)),
+            # Anyone still owing anything. Broader than unpaid+partial, and it
+            # correctly ignores waived and advance records, whose balance is 0.
+            defaulter_count=Count('id', filter=Q(balance__gt=0)),
         )
         num = lambda k: float(agg[k] or 0)
         return Response({
@@ -967,13 +982,18 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             # This period's own billing — total_due with arrears taken out.
             'total_due_excl_arrears': num('total_due') - num('total_previous_balance'),
             # The collected total, split by what it paid off.
-            'collected_current_fee':  num('paid_current_fee'),
-            'collected_arrears':      num('paid_previous_balance'),
-            'collected_misc_charges': num('paid_misc_charges'),
-            'collected_from_advance': num('advance_applied'),
+            'collected_current_fee':  num('sum_paid_fee'),
+            'collected_arrears':      num('sum_paid_arrears'),
+            'collected_misc_charges': num('sum_paid_charges'),
+            'collected_from_advance': num('sum_advance_applied'),
             'unpaid_count':           agg['unpaid_count'],
             'partial_count':          agg['partial_count'],
             'paid_count':             agg['paid_count'],
+            'paid_fee_count':         agg['paid_fee_count'],
+            'with_arrears_count':     agg['with_arrears_count'],
+            'cleared_arrears_count':  agg['cleared_arrears_count'],
+            'with_charges_count':     agg['with_charges_count'],
+            'defaulter_count':        agg['defaulter_count'],
         })
 
     # Balance Sheet PDF 
