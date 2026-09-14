@@ -962,6 +962,8 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             # cleared this month's fee but still owes arrears reads as
             # "partial" and would be invisible in every one of these.
             paid_fee_count=Count('id', filter=Q(paid_current_fee__gte=F('current_fee'))),
+            partial_fee_count=Count('id', filter=Q(paid_current_fee__gt=0)
+                                     & Q(paid_current_fee__lt=F('current_fee'))),
             with_arrears_count=Count('id', filter=Q(previous_balance__gt=0)),
             cleared_arrears_count=Count('id', filter=Q(previous_balance__gt=0)
                                         & Q(paid_previous_balance__gte=F('previous_balance'))),
@@ -990,10 +992,62 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             'partial_count':          agg['partial_count'],
             'paid_count':             agg['paid_count'],
             'paid_fee_count':         agg['paid_fee_count'],
+            'partial_fee_count':      agg['partial_fee_count'],
             'with_arrears_count':     agg['with_arrears_count'],
             'cleared_arrears_count':  agg['cleared_arrears_count'],
             'with_charges_count':     agg['with_charges_count'],
             'defaulter_count':        agg['defaulter_count'],
+        })
+
+    @action(detail=False, methods=['get'], url_path='dues-summary')
+    def dues_summary(self, request):
+        """What the school is owed right now, across every period.
+
+        Deliberately ignores the month/year filters: this is the standing
+        position, not a period's billing.
+
+        Summing `balance` over records would double count. An unpaid September
+        rolls into October's previous_balance, so a student owing one month's
+        fee across two records appears to owe it twice. The ledger's rule is
+        that a student owes their unpaid legacy arrears plus what each period
+        still owes *for itself* — mirrored here in SQL so the dashboard does not
+        walk 584 students in Python. See own_outstanding()/legacy_remaining()
+        in fees/ledger.py; this must stay in step with them.
+        """
+        with connection.cursor() as cur:
+            cur.execute("""
+                WITH per_student AS (
+                    SELECT student_id,
+                           SUM(CASE WHEN status IN ('waived', 'advance') THEN 0
+                                    ELSE GREATEST(current_fee  - paid_current_fee,  0)
+                                       + GREATEST(misc_charges - paid_misc_charges, 0)
+                               END) AS own_out,
+                           -- the earliest record's previous_balance is the only
+                           -- arrears figure never re-derived: the seed
+                           (ARRAY_AGG(previous_balance ORDER BY year, month, id))[1] AS seed,
+                           SUM(paid_previous_balance) AS paid_seed
+                      FROM fees_feerecord
+                     GROUP BY student_id
+                )
+                SELECT COUNT(*) FILTER (
+                           WHERE own_out + GREATEST(seed - paid_seed, 0) > 0),
+                       COALESCE(SUM(own_out + GREATEST(seed - paid_seed, 0)), 0),
+                       COALESCE(SUM(own_out), 0),
+                       COALESCE(SUM(GREATEST(seed - paid_seed, 0)), 0)
+                  FROM per_student
+            """)
+            students_owing, total_dues, own_dues, legacy_dues = cur.fetchone()
+
+        total_students = StudentProfile.objects.exclude(withdrawn='yes').count()
+        return Response({
+            'total_students':   total_students,
+            'students_owing':   students_owing,
+            'students_clear':   max(0, total_students - students_owing),
+            'total_dues':       float(total_dues),
+            # What the outstanding total is made of: unpaid periods, versus
+            # arrears students were carrying before any record existed.
+            'period_dues':      float(own_dues),
+            'legacy_dues':      float(legacy_dues),
         })
 
     # Balance Sheet PDF 

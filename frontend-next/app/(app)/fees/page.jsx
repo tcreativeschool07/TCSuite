@@ -32,6 +32,9 @@ const MONTHS = [
 const NOW = new Date()
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const rs = (v) => `Rs ${Number(v).toLocaleString()}`
+// " · 33%" — omitted when there is nothing to take a share of.
+const pct = (part, whole) =>
+  whole > 0 ? ` · ${Math.round((Number(part) / Number(whole)) * 100)}%` : ''
 const ALL_KEY = '__all__'
 
 export default function FeeDashboard() {
@@ -344,6 +347,76 @@ export default function FeeDashboard() {
                 title="Outstanding"
                 value={rs(summary.total_balance || 0)}
                 sub={`${summary.unpaid_count ?? 0} unpaid, ${summary.partial_count ?? 0} partial`}
+                color="red"
+                icon={<Icon name="chart" size={18} />}
+                href="/fees/defaulters"
+              />
+            </div>
+
+            {/* What the money collected in this period actually paid off, and
+                how many students each figure represents. Every payment is
+                split across these buckets as it is taken, so the three
+                collected figures add back up to the total.
+
+                The head counts read that split rather than `status`: status
+                describes the record as a whole, so a student who has settled
+                this month's fee but still owes arrears is "partial" and would
+                never be counted as having paid the fee. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StatCard
+                title={`${monthLabel || 'Month'} fee collected`}
+                value={rs(summary.collected_current_fee || 0)}
+                sub={`of ${rs(summary.total_current_fee || 0)} billed`}
+                color="green"
+                icon={<Icon name="tag" size={18} />}
+              />
+              <StatCard
+                title="Pending dues collected"
+                value={rs(summary.collected_arrears || 0)}
+                sub="Arrears recovered in this period"
+                color="yellow"
+                icon={<Icon name="report" size={18} />}
+              />
+              <StatCard
+                title="Charges collected"
+                value={rs(summary.collected_misc_charges || 0)}
+                sub={
+                  summary.with_charges_count
+                    ? `${summary.with_charges_count} student${summary.with_charges_count === 1 ? '' : 's'} charged`
+                    : 'Books, diaries and the rest'
+                }
+                color="blue"
+                icon={<Icon name="plus" size={18} />}
+              />
+              <StatCard
+                title={`Paid ${monthLabel || 'month'} fee`}
+                value={<span className="num">{summary.paid_fee_count ?? 0}</span>}
+                sub={`of ${summary.total_records ?? 0} billed${pct(summary.paid_fee_count, summary.total_records)}`}
+                color="green"
+                icon={<Icon name="students" size={18} />}
+              />
+              <StatCard
+                title="Partially paid"
+                value={<span className="num">{summary.partial_fee_count ?? 0}</span>}
+                sub={`paid some of ${monthLabel || 'the month'}'s fee${pct(summary.partial_fee_count, summary.total_records)}`}
+                color="yellow"
+                icon={<Icon name="calculator" size={18} />}
+              />
+              <StatCard
+                title="Cleared pending dues"
+                value={<span className="num">{summary.cleared_arrears_count ?? 0}</span>}
+                sub={
+                  summary.with_arrears_count
+                    ? `of ${summary.with_arrears_count} carrying arrears${pct(summary.cleared_arrears_count, summary.with_arrears_count)}`
+                    : 'Nobody carried arrears in'
+                }
+                color="teal"
+                icon={<Icon name="report" size={18} />}
+              />
+              <StatCard
+                title="Defaulters"
+                value={<span className="num">{summary.defaulter_count ?? 0}</span>}
+                sub={`still owe for this period${pct(summary.defaulter_count, summary.total_records)}`}
                 color="red"
                 icon={<Icon name="chart" size={18} />}
                 href="/fees/defaulters"

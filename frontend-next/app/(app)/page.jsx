@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, useReducedMotion } from 'framer-motion'
 import { getStudentStats } from '@/src/api/studentsApi'
-import { getFeeSummary, getTopDefaulters } from '@/src/api/feesApi'
+import { getDuesSummary, getTopDefaulters } from '@/src/api/feesApi'
 import StatCard from '@/src/components/StatCard'
 import Badge from '@/src/components/Badge'
 import CountUp from '@/src/components/CountUp'
@@ -18,9 +18,6 @@ import { Icon } from '@/src/components/icons'
 import { KpiGridSkeleton, TableSkeleton, EmptyState } from '@/src/components/Skeleton'
 
 const rs = (v) => `Rs ${Number(v).toLocaleString()}`
-// " (33%)" — omitted when there is nothing to take a share of.
-const pct = (part, whole) =>
-  whole > 0 ? ` · ${Math.round((Number(part) / Number(whole)) * 100)}%` : ''
 const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : String(n))
 
 const quickActions = [
@@ -39,177 +36,79 @@ export default function Dashboard() {
   const reduced = useReducedMotion()
 
   useEffect(() => {
-    const now = new Date()
     // allSettled, not all: one failing call must not blank every KPI tile.
+    // Dues are asked for school-wide, not for a month — this page answers
+    // "where do we stand", and anything that changes with the month now lives
+    // on the fee dashboard, which has a period selector to change it with.
     Promise.allSettled([
       getStudentStats(),
-      getFeeSummary({ month: now.getMonth() + 1, year: now.getFullYear() }),
+      getDuesSummary(),
       getTopDefaulters({ limit: 10 }),
     ])
-      .then(([studRes, sumRes, defaultersRes]) => {
+      .then(([studRes, duesRes, defaultersRes]) => {
         const studentData = studRes.status === 'fulfilled' ? studRes.value.data : null
-        const summaryData = sumRes.status === 'fulfilled' ? sumRes.value.data : null
+        const duesData = duesRes.status === 'fulfilled' ? duesRes.value.data : null
         setStats({
           totalStudents: studentData?.active ?? null,
-          ...(summaryData ?? {}),
+          withdrawn: studentData?.withdrawn ?? null,
+          ...(duesData ?? {}),
         })
         setRecent(defaultersRes.status === 'fulfilled' ? defaultersRes.value.data : [])
       })
       .finally(() => setLoading(false))
   }, [])
 
-  const now = new Date()
-  const month = now.toLocaleString('default', { month: 'long', year: 'numeric' })
-  // Just the month, for the cards that report on this month's own billing.
-  const monthName = now.toLocaleString('default', { month: 'long' })
+  const month = new Date().toLocaleString('default', { month: 'long', year: 'numeric' })
 
   return (
     <div className="max-w-content mx-auto px-6 py-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="page-title">Dashboard</h1>
-        <p className="text-[13px] text-ink-3 mt-1">{month} overview</p>
+        <p className="text-[13px] text-ink-3 mt-1">Standing position · {month}</p>
       </div>
 
-      {/* KPI grid */}
+      {/* KPI grid — the standing position, not this month's billing */}
       {loading ? (
-        <KpiGridSkeleton count={11} />
+        <KpiGridSkeleton count={3} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             title="Total students"
             value={<CountUp value={stats?.totalStudents ?? null} />}
-            sub="Enrolled"
+            sub={stats?.withdrawn ? `${stats.withdrawn} withdrawn` : 'Currently enrolled'}
             color="blue"
             icon={<Icon name="students" size={18} />}
           />
-          <StatCard
-            title="This month's fees"
-            value={
-              stats?.total_current_fee != null
-                ? <CountUp value={Number(stats.total_current_fee)} format={(v) => rs(v)} />
-                : '—'
-            }
-            sub={
-              stats?.total_previous_balance
-                ? `Excludes ${rs(stats.total_previous_balance)} arrears`
-                : 'Excludes arrears'
-            }
-            color="yellow"
-            icon={<Icon name="tag" size={18} />}
-          />
-          <StatCard
-            title="Total collected"
-            value={
-              stats?.total_collected != null
-                ? <CountUp value={Number(stats.total_collected)} format={(v) => rs(v)} />
-                : '—'
-            }
-            sub="This month"
-            color="green"
-            icon={<Icon name="card" size={18} />}
-          />
-          <StatCard
-            title="Outstanding balance"
-            value={
-              stats?.total_balance != null
-                ? <CountUp value={Number(stats.total_balance)} format={(v) => rs(v)} />
-                : '—'
-            }
-            sub="Pending dues"
-            color="red"
-            icon={<Icon name="report" size={18} />}
-          />
-          <StatCard
-            title="Fully paid"
-            value={<CountUp value={stats?.paid_count ?? null} />}
-            sub="Records this month"
-            color="teal"
-            icon={<Icon name="calculator" size={18} />}
-          />
-          {/* Every payment is split as it is recorded across this month's own
-              tuition, arrears carried in, and charges — so these two cards
-              answer "what did the money we took actually pay off?" rather than
-              lumping it into one collected figure. */}
-          <StatCard
-            title={`${monthName} fee collected`}
-            value={
-              stats?.collected_current_fee != null
-                ? <CountUp value={Number(stats.collected_current_fee)} format={(v) => rs(v)} />
-                : '—'
-            }
-            sub={
-              stats?.total_current_fee
-                ? `of ${rs(stats.total_current_fee)} billed for ${monthName}`
-                : `${monthName} tuition only`
-            }
-            color="green"
-            icon={<Icon name="tag" size={18} />}
-          />
-          <StatCard
-            title="Pending dues collected"
-            value={
-              stats?.collected_arrears != null
-                ? <CountUp value={Number(stats.collected_arrears)} format={(v) => rs(v)} />
-                : '—'
-            }
-            sub="Arrears recovered this month"
-            color="yellow"
-            icon={<Icon name="report" size={18} />}
-          />
-          <StatCard
-            title="Charges collected"
-            value={
-              stats?.collected_misc_charges != null
-                ? <CountUp value={Number(stats.collected_misc_charges)} format={(v) => rs(v)} />
-                : '—'
-            }
-            sub={
-              stats?.with_charges_count
-                ? `${stats.with_charges_count} student${stats.with_charges_count === 1 ? '' : 's'} charged`
-                : 'Books, diaries and the rest'
-            }
-            color="blue"
-            icon={<Icon name="plus" size={18} />}
-          />
-
-          {/* Head counts. These read the payment split rather than `status`,
-              because status describes the whole record — a student who has
-              cleared this month's fee but still owes arrears is "partial", and
-              would otherwise not be counted as having paid the fee at all. */}
-          <StatCard
-            title={`Paid ${monthName} fee`}
-            value={<CountUp value={stats?.paid_fee_count ?? null} />}
-            sub={
-              stats?.total_records
-                ? `of ${stats.total_records} billed${pct(stats.paid_fee_count, stats.total_records)}`
-                : 'Students who settled this month'
-            }
-            color="green"
-            icon={<Icon name="students" size={18} />}
-          />
-          <StatCard
-            title="Cleared pending dues"
-            value={<CountUp value={stats?.cleared_arrears_count ?? null} />}
-            sub={
-              stats?.with_arrears_count
-                ? `of ${stats.with_arrears_count} carrying arrears${pct(stats.cleared_arrears_count, stats.with_arrears_count)}`
-                : 'Nobody is carrying arrears'
-            }
-            color="teal"
-            icon={<Icon name="calculator" size={18} />}
-          />
+          {/* Counted per student, not per unpaid record: an unpaid September
+              rolls into October's arrears, so counting records would count the
+              same student again every month they stay behind. */}
           <StatCard
             title="Defaulters"
-            value={<CountUp value={stats?.defaulter_count ?? null} />}
+            value={<CountUp value={stats?.students_owing ?? null} />}
             sub={
-              stats?.total_records
-                ? `still owe something${pct(stats.defaulter_count, stats.total_records)}`
-                : 'Nothing outstanding'
+              stats?.total_students
+                ? `of ${stats.total_students} students owe dues`
+                : 'Students carrying dues'
             }
             color="red"
             icon={<Icon name="report" size={18} />}
             href="/fees/defaulters"
+          />
+          <StatCard
+            title="Pending dues"
+            value={
+              stats?.total_dues != null
+                ? <CountUp value={Number(stats.total_dues)} format={(v) => rs(v)} />
+                : '—'
+            }
+            sub={
+              stats?.legacy_dues
+                ? `includes ${rs(stats.legacy_dues)} carried in`
+                : 'Outstanding across all months'
+            }
+            color="yellow"
+            icon={<Icon name="card" size={18} />}
           />
         </div>
       )}

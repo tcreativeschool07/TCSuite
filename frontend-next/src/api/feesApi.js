@@ -61,6 +61,11 @@ export const deleteFeeRecord = (id) =>
 export const getFeeSummary = (params) =>
   client.get('/fees/records/summary/', { params })
 
+// What the school is owed right now, across every period — not a month's
+// billing. Arrears rolled forward are counted once, not once per record.
+export const getDuesSummary = () =>
+  client.get('/fees/records/dues-summary/')
+
 export const getBalanceSheet = (params) =>
   client.get('/fees/records/balance-sheet/', { params })
 
