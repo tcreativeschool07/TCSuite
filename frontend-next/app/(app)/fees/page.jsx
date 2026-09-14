@@ -413,13 +413,16 @@ export default function FeeDashboard() {
                 color="teal"
                 icon={<Icon name="report" size={18} />}
               />
+              {/* This period only. The school-wide defaulter count lives on
+                  the main dashboard, where it is counted per student rather
+                  than per unpaid month. Paid / partially paid / unpaid are
+                  mutually exclusive and add up to the records billed. */}
               <StatCard
-                title="Defaulters"
-                value={<span className="num">{summary.defaulter_count ?? 0}</span>}
-                sub={`still owe for this period${pct(summary.defaulter_count, summary.total_records)}`}
+                title={`Unpaid ${monthLabel || 'this month'}`}
+                value={<span className="num">{summary.unpaid_fee_count ?? 0}</span>}
+                sub={`paid nothing toward the fee${pct(summary.unpaid_fee_count, summary.total_records)}`}
                 color="red"
                 icon={<Icon name="chart" size={18} />}
-                href="/fees/defaulters"
               />
             </div>
 

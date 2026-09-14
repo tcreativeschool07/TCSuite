@@ -964,6 +964,9 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             paid_fee_count=Count('id', filter=Q(paid_current_fee__gte=F('current_fee'))),
             partial_fee_count=Count('id', filter=Q(paid_current_fee__gt=0)
                                      & Q(paid_current_fee__lt=F('current_fee'))),
+            # Nothing at all put toward this month's own fee. Paid / partial /
+            # unpaid are mutually exclusive and add up to total_records.
+            unpaid_fee_count=Count('id', filter=Q(paid_current_fee__lte=0)),
             with_arrears_count=Count('id', filter=Q(previous_balance__gt=0)),
             cleared_arrears_count=Count('id', filter=Q(previous_balance__gt=0)
                                         & Q(paid_previous_balance__gte=F('previous_balance'))),
@@ -993,6 +996,7 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             'paid_count':             agg['paid_count'],
             'paid_fee_count':         agg['paid_fee_count'],
             'partial_fee_count':      agg['partial_fee_count'],
+            'unpaid_fee_count':       agg['unpaid_fee_count'],
             'with_arrears_count':     agg['with_arrears_count'],
             'cleared_arrears_count':  agg['cleared_arrears_count'],
             'with_charges_count':     agg['with_charges_count'],
