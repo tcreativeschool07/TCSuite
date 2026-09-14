@@ -943,6 +943,14 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             total_current_fee=Sum('current_fee'),
             total_misc_charges=Sum('misc_charges'),
             total_previous_balance=Sum('previous_balance'),
+            # What the money collected was actually *for*. Every payment is
+            # split across these three buckets as it is recorded, and they add
+            # back up to total_collected — so a caller can show this period's
+            # own tuition separately from arrears recovered against it.
+            paid_current_fee=Sum('paid_current_fee'),
+            paid_previous_balance=Sum('paid_previous_balance'),
+            paid_misc_charges=Sum('paid_misc_charges'),
+            advance_applied=Sum('advance_applied'),
             unpaid_count=Count('id', filter=Q(status='unpaid')),
             partial_count=Count('id', filter=Q(status='partial')),
             paid_count=Count('id', filter=Q(status='paid')),
@@ -958,6 +966,11 @@ class FeeRecordViewSet(viewsets.ModelViewSet):
             'total_previous_balance': num('total_previous_balance'),
             # This period's own billing — total_due with arrears taken out.
             'total_due_excl_arrears': num('total_due') - num('total_previous_balance'),
+            # The collected total, split by what it paid off.
+            'collected_current_fee':  num('paid_current_fee'),
+            'collected_arrears':      num('paid_previous_balance'),
+            'collected_misc_charges': num('paid_misc_charges'),
+            'collected_from_advance': num('advance_applied'),
             'unpaid_count':           agg['unpaid_count'],
             'partial_count':          agg['partial_count'],
             'paid_count':             agg['paid_count'],

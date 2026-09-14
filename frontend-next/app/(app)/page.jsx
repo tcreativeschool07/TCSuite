@@ -55,7 +55,10 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  const month = new Date().toLocaleString('default', { month: 'long', year: 'numeric' })
+  const now = new Date()
+  const month = now.toLocaleString('default', { month: 'long', year: 'numeric' })
+  // Just the month, for the cards that report on this month's own billing.
+  const monthName = now.toLocaleString('default', { month: 'long' })
 
   return (
     <div className="max-w-content mx-auto px-6 py-6 space-y-6">
@@ -67,9 +70,9 @@ export default function Dashboard() {
 
       {/* KPI grid */}
       {loading ? (
-        <KpiGridSkeleton count={5} />
+        <KpiGridSkeleton count={7} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <StatCard
             title="Total students"
             value={<CountUp value={stats?.totalStudents ?? null} />}
@@ -120,6 +123,36 @@ export default function Dashboard() {
             sub="Records this month"
             color="teal"
             icon={<Icon name="calculator" size={18} />}
+          />
+          {/* Every payment is split as it is recorded across this month's own
+              tuition, arrears carried in, and charges — so these two cards
+              answer "what did the money we took actually pay off?" rather than
+              lumping it into one collected figure. */}
+          <StatCard
+            title={`${monthName} fee collected`}
+            value={
+              stats?.collected_current_fee != null
+                ? <CountUp value={Number(stats.collected_current_fee)} format={(v) => rs(v)} />
+                : '—'
+            }
+            sub={
+              stats?.total_current_fee
+                ? `of ${rs(stats.total_current_fee)} billed for ${monthName}`
+                : `${monthName} tuition only`
+            }
+            color="green"
+            icon={<Icon name="tag" size={18} />}
+          />
+          <StatCard
+            title="Pending dues collected"
+            value={
+              stats?.collected_arrears != null
+                ? <CountUp value={Number(stats.collected_arrears)} format={(v) => rs(v)} />
+                : '—'
+            }
+            sub="Arrears recovered this month"
+            color="yellow"
+            icon={<Icon name="report" size={18} />}
           />
         </div>
       )}
